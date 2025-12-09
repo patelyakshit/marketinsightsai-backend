@@ -1,0 +1,81 @@
+{% extends "reports/tapestry/base_multi.html" %}
+
+{% block content %}
+    {% for store_data in stores_data %}
+        {% set store = store_data.store %}
+        {% set segments = store_data.segments %}
+        {% set insights = store_data.insights %}
+        {% set max_share = store_data.max_share %}
+        {% set segment_images = store_data.segment_images %}
+        {% set store_start_page = store_data.start_page %}
+
+        {# PAGE 1: Header, Chart, Top Segment, Insights #}
+        <div class="page">
+            {% include "reports/tapestry/components/header.html" %}
+
+            <div class="main-content">
+                {% include "reports/tapestry/components/chart.html" %}
+
+                {# First segment card (not compact) #}
+                {% if segments|length > 0 %}
+                    {% set segment = segments[0] %}
+                    {% set compact = false %}
+                    {% include "reports/tapestry/components/segment_card.html" %}
+                {% endif %}
+
+                {% include "reports/tapestry/components/insights.html" %}
+            </div>
+
+            {% set page_number = store_start_page %}
+            {% include "reports/tapestry/components/footer.html" %}
+        </div>
+
+        {# PAGE 2: Segments 2 and 3 #}
+        <div class="page">
+            {% include "reports/tapestry/components/header.html" %}
+
+            <div class="main-content">
+                {# Second segment card (compact) #}
+                {% if segments|length > 1 %}
+                    {% set segment = segments[1] %}
+                    {% set compact = true %}
+                    {% include "reports/tapestry/components/segment_card.html" %}
+                {% endif %}
+
+                {# Third segment card (compact) #}
+                {% if segments|length > 2 %}
+                    {% set segment = segments[2] %}
+                    {% set compact = true %}
+                    {% include "reports/tapestry/components/segment_card.html" %}
+                {% endif %}
+            </div>
+
+            {% set page_number = store_start_page + 1 %}
+            {% include "reports/tapestry/components/footer.html" %}
+        </div>
+
+        {# PAGE 3: Segments 4 and 5 #}
+        <div class="page">
+            {% include "reports/tapestry/components/header.html" %}
+
+            <div class="main-content">
+                {# Fourth segment card (compact) #}
+                {% if segments|length > 3 %}
+                    {% set segment = segments[3] %}
+                    {% set compact = true %}
+                    {% include "reports/tapestry/components/segment_card.html" %}
+                {% endif %}
+
+                {# Fifth segment card (compact) #}
+                {% if segments|length > 4 %}
+                    {% set segment = segments[4] %}
+                    {% set compact = true %}
+                    {% include "reports/tapestry/components/segment_card.html" %}
+                {% endif %}
+            </div>
+
+            {% set page_number = store_start_page + 2 %}
+            {% include "reports/tapestry/components/footer.html" %}
+        </div>
+    {% endfor %}
+{% endblock %}

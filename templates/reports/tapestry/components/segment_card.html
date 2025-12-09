@@ -1,0 +1,82 @@
+{# Segment Card Component #}
+{# Required variables: segment, segment_color, segment_image_base64, compact (optional) #}
+
+{% set seg_color = segment_colors.get(segment.code[0], '#64748B') %}
+
+<div class="segment-card">
+    {# Top section: Image left + Stats right #}
+    <div class="segment-card-top">
+        {# Left: Segment Image #}
+        <div class="segment-card-image">
+            {% if segment_images.get(segment.code) %}
+                <img src="{{ segment_images.get(segment.code) }}" alt="{{ segment.name }}" class="segment-profile-image">
+            {% else %}
+                <div class="segment-profile-placeholder" style="background: {{ seg_color }};">
+                    <span>{{ segment.code }}</span>
+                </div>
+            {% endif %}
+        </div>
+        <div class="segment-stats-table">
+            <div class="stats-table-row">
+                <span class="stats-label">Median age</span>
+                <span class="stats-value">{{ "%.1f"|format(segment.median_age) if segment.median_age else 'N/A' }}</span>
+            </div>
+            <div class="stats-table-row">
+                <span class="stats-label">Median household income</span>
+                <span class="stats-value">{{ "${:,.0f}".format(segment.median_household_income) if segment.median_household_income else 'N/A' }}</span>
+            </div>
+            <div class="stats-table-row">
+                <span class="stats-label">Median net worth</span>
+                <span class="stats-value">{{ "${:,.0f}".format(segment.median_net_worth) if segment.median_net_worth else 'N/A' }}</span>
+            </div>
+            <div class="stats-table-row">
+                <span class="stats-label">Homeownership rate</span>
+                <span class="stats-value">{{ "%.1f%%"|format(segment.homeownership_rate * 100) if segment.homeownership_rate else 'N/A' }}</span>
+            </div>
+        </div>
+    </div>
+
+    {# Middle section: 4 separate stat boxes with segment color styling (task 3) #}
+    <div class="segment-stat-boxes">
+        {# First box: solid segment color bg, white text #}
+        <div class="stat-box stat-box-primary" style="background: {{ seg_color }};">
+            <span class="stat-box-value">{{ segment.household_share|round(0)|int }}%</span>
+        </div>
+        {# Remaining 3 boxes: 5% opacity segment color bg, segment color text #}
+        <div class="stat-box stat-box-secondary" style="background: {{ seg_color }}0D; color: {{ seg_color }};">
+            <span class="stat-box-value">{{ "{:,}".format(segment.household_count) }}</span>
+            <span class="stat-box-label">Households</span>
+        </div>
+        <div class="stat-box stat-box-secondary" style="background: {{ seg_color }}0D; color: {{ seg_color }};">
+            <span class="stat-box-value">{{ segment.life_mode or 'N/A' }}</span>
+            <span class="stat-box-label">LifeMode Group</span>
+        </div>
+        <div class="stat-box stat-box-secondary" style="background: {{ seg_color }}0D; color: {{ seg_color }};">
+            <span class="stat-box-value">{{ segment.life_stage or 'N/A' }}</span>
+            <span class="stat-box-label">Life Stage</span>
+        </div>
+    </div>
+
+    {# Bottom section: Segment Description #}
+    {% if segment.description %}
+    <div class="segment-description-box">
+        <div class="segment-description-header" style="color: {{ seg_color }};">Segment Description</div>
+        <div class="segment-description-content">
+            <p>{{ segment.description }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Segment-specific AI Insight (task 6) #}
+    {% if segment_insights and segment_insights.get(segment.code) %}
+    <div class="segment-insight-box">
+        <div class="segment-insight-header">
+            <span>Unlock Business Insights</span>
+            <span class="insights-scope">For {{ segment.code }}</span>
+        </div>
+        <div class="segment-insight-content">
+            <p>{{ segment_insights.get(segment.code) | safe }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>

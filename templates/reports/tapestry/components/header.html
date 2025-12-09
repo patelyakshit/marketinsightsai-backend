@@ -1,0 +1,25 @@
+{# Top Header Bar with Logo and Website #}
+<div class="top-header">
+    {% if logo_base64 %}
+        <img src="{{ logo_base64 }}" alt="Location Matters" class="header-logo">
+    {% else %}
+        <span class="top-header-brand">Location Matters</span>
+    {% endif %}
+    <a href="https://www.locationmatters.com" target="_blank" class="top-header-url">www.locationmatters.com</a>
+</div>
+
+{# Report Header with Store Info #}
+<div class="report-header">
+    <div class="report-header-left">
+        <h1 class="store-title">{{ store.name }}</h1>
+        <p class="report-subtitle">Top 5 Lifestyle Segments (Household Share)</p>
+    </div>
+    <div class="report-header-right">
+        <div class="info-badge">
+            <strong>Store ID:</strong> {{ store.store_number or 'N/A' }}
+        </div>
+        <div class="info-badge">
+            <strong>Distance:</strong> {{ store.distance or '100 miles' }}
+        </div>
+    </div>
+</div>

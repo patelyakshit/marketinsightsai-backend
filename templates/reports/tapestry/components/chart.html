@@ -1,0 +1,15 @@
+{# Horizontal Bar Chart for Top 5 Segments #}
+<div class="chart-section">
+    <div class="chart-container">
+        {% for segment in segments %}
+        <div class="chart-row">
+            <div class="chart-label">{{ segment.code }}: {{ segment.name }}</div>
+            <div class="chart-bar-container">
+                <div class="chart-bar" style="width: {{ (segment.household_share / max_share * 100)|round(1) }}%; background-color: {{ segment_colors.get(segment.code[0], '#64748B') }};">
+                    <span class="chart-bar-text">{{ segment.household_share|round(0)|int }}% ({{ "{:,}".format(segment.household_count) }} HHs)</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>

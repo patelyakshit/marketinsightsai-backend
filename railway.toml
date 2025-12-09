@@ -1,0 +1,10 @@
+[build]
+# Use Dockerfile for production builds (recommended over Nixpacks)
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Start command is defined in Dockerfile CMD
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

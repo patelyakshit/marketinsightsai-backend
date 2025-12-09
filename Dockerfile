@@ -78,5 +78,6 @@ USER appuser
 EXPOSE 8000
 
 # Start the application
-# Railway injects PORT env var, default to 8000 if not set
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Use ENTRYPOINT with shell to properly expand PORT variable
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

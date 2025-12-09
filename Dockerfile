@@ -78,5 +78,5 @@ USER appuser
 EXPOSE 8000
 
 # Start the application
-# Railway injects $PORT - do not use default fallback
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
+# Railway injects PORT env var, default to 8000 if not set
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

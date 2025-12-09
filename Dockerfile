@@ -74,10 +74,9 @@ RUN useradd --create-home --shell /bin/bash appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Expose port (Railway will set $PORT)
+# Expose port
 EXPOSE 8000
 
-# Start the application
-# Use ENTRYPOINT with shell to properly expand PORT variable
-ENTRYPOINT ["/bin/sh", "-c"]
-CMD ["uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Start command is defined in railway.toml startCommand
+# This CMD is a fallback for local Docker builds only
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

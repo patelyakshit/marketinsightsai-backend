@@ -1,9 +1,9 @@
 [build]
-# Use Dockerfile for production builds (recommended over Nixpacks)
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Start command is defined in Dockerfile CMD
+# startCommand overrides Dockerfile CMD - Railway expands $PORT here
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"

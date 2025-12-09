@@ -16,24 +16,28 @@
                 </div>
             {% endif %}
         </div>
-        <div class="segment-stats-table">
-            <div class="stats-table-row">
-                <span class="stats-label">Median age</span>
-                <span class="stats-value">{{ "%.1f"|format(segment.median_age) if segment.median_age else 'N/A' }}</span>
-            </div>
-            <div class="stats-table-row">
-                <span class="stats-label">Median household income</span>
-                <span class="stats-value">{{ "${:,.0f}".format(segment.median_household_income) if segment.median_household_income else 'N/A' }}</span>
-            </div>
-            <div class="stats-table-row">
-                <span class="stats-label">Median net worth</span>
-                <span class="stats-value">{{ "${:,.0f}".format(segment.median_net_worth) if segment.median_net_worth else 'N/A' }}</span>
-            </div>
-            <div class="stats-table-row">
-                <span class="stats-label">Homeownership rate</span>
-                <span class="stats-value">{{ "%.1f%%"|format(segment.homeownership_rate * 100) if segment.homeownership_rate else 'N/A' }}</span>
-            </div>
-        </div>
+        <table class="segment-stats-table">
+            <colgroup>
+                <col style="width: 50%;">
+                <col style="width: 50%;">
+            </colgroup>
+            <tr>
+                <td class="stats-label">Median age</td>
+                <td class="stats-value">{{ "%.1f"|format(segment.median_age) if segment.median_age else 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="stats-label">Median household income</td>
+                <td class="stats-value">{{ "${:,.0f}".format(segment.median_household_income) if segment.median_household_income else 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="stats-label">Median net worth</td>
+                <td class="stats-value">{{ "${:,.0f}".format(segment.median_net_worth) if segment.median_net_worth else 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="stats-label">Homeownership rate</td>
+                <td class="stats-value">{{ "%.1f%%"|format(segment.homeownership_rate * 100) if segment.homeownership_rate else 'N/A' }}</td>
+            </tr>
+        </table>
     </div>
 
     {# Middle section: 4 separate stat boxes with segment color styling (task 3) #}

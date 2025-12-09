@@ -1,7 +1,8 @@
 from datetime import datetime
 import os
-from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, Enum, JSON, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, Enum, JSON, ForeignKey, Numeric, Index
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import JSONB
 import enum
 
 from app.db.database import Base
@@ -288,3 +289,214 @@ class FolderChatMessage(Base):
 
     # Relationships
     chat = relationship("FolderChat", back_populates="messages")
+
+
+# ============== Context Engineering Models ==============
+# Implements Manus AI-inspired context management for persistent, optimized AI conversations
+
+
+class SessionStatus(str, enum.Enum):
+    """Status of a chat session."""
+    active = "active"
+    paused = "paused"
+    completed = "completed"
+    expired = "expired"
+
+
+class EventType(str, enum.Enum):
+    """Types of events in the event stream."""
+    user = "user"           # User message
+    assistant = "assistant" # AI response
+    action = "action"       # Tool/function call initiated
+    observation = "observation"  # Result from action
+    plan = "plan"           # Planning/reasoning step
+    error = "error"         # Error occurred
+
+
+class GoalStatus(str, enum.Enum):
+    """Status of a session goal."""
+    pending = "pending"
+    in_progress = "in_progress"
+    completed = "completed"
+    cancelled = "cancelled"
+
+
+class ChatSession(Base):
+    """
+    Core session management for context engineering.
+    Tracks user sessions with token usage and cost metrics.
+    """
+    __tablename__ = "chat_sessions"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    folder_id = Column(String(36), ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = Column(String(255), nullable=True)
+
+    # Context metrics
+    context_window_used = Column(Integer, default=0)  # Current tokens in context
+    total_tokens_used = Column(Integer, default=0)    # Cumulative tokens
+    total_cost = Column(Numeric(10, 6), default=0)    # Cumulative cost in USD
+
+    # Session state
+    status = Column(Enum(SessionStatus), default=SessionStatus.active, index=True)
+    expires_at = Column(DateTime, nullable=True, index=True)  # Auto-cleanup after TTL
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_activity_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", backref="chat_sessions")
+    folder = relationship("Folder", backref="chat_sessions")
+    events = relationship("SessionEvent", back_populates="session", cascade="all, delete-orphan")
+    workspace_files = relationship("SessionWorkspaceFile", back_populates="session", cascade="all, delete-orphan")
+    goals = relationship("SessionGoal", back_populates="session", cascade="all, delete-orphan",
+                        foreign_keys="SessionGoal.session_id")
+    state_cache = relationship("SessionStateCache", back_populates="session", uselist=False, cascade="all, delete-orphan")
+    token_usages = relationship("TokenUsage", back_populates="session", cascade="all, delete-orphan")
+
+
+class SessionEvent(Base):
+    """
+    Chronological event stream for context persistence.
+    Append-only design for KV-cache optimization.
+    """
+    __tablename__ = "session_events"
+
+    id = Column(String(36), primary_key=True)
+    session_id = Column(String(36), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
+    sequence_num = Column(Integer, nullable=False)  # Order within session
+
+    # Event data
+    event_type = Column(Enum(EventType), nullable=False, index=True)
+    content = Column(Text, nullable=False)  # JSON content
+
+    # Token tracking
+    token_count = Column(Integer, default=0)
+    cached_tokens = Column(Integer, default=0)  # For KV-cache tracking
+
+    # Metadata
+    event_metadata = Column("metadata", JSONB, default=dict)  # Action results, error traces, etc.
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    session = relationship("ChatSession", back_populates="events")
+
+    # Composite index for efficient retrieval
+    __table_args__ = (
+        Index("idx_session_events_session_seq", "session_id", "sequence_num"),
+    )
+
+
+class SessionWorkspaceFile(Base):
+    """
+    File system as extended context.
+    Stores references to large content (not in context window).
+    """
+    __tablename__ = "session_workspace_files"
+
+    id = Column(String(36), primary_key=True)
+    session_id = Column(String(36), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # File reference
+    reference_key = Column(String(255), nullable=False, index=True)  # e.g., "tapestry_upload_001.xlsx"
+    file_type = Column(String(50), nullable=True)  # xlsx, pdf, json, observation
+
+    # Storage location
+    storage_path = Column(Text, nullable=True)  # Path to actual file
+    content_hash = Column(String(64), nullable=True)  # SHA256 for deduplication
+
+    # Metadata
+    size_bytes = Column(Integer, nullable=True)
+    summary = Column(Text, nullable=True)  # Brief description for context
+    file_metadata = Column("metadata", JSONB, default=dict)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    session = relationship("ChatSession", back_populates="workspace_files")
+
+
+class SessionGoal(Base):
+    """
+    Todo.md style goal tracking.
+    Goals are placed at END of context to combat "lost-in-the-middle" effect.
+    """
+    __tablename__ = "session_goals"
+
+    id = Column(String(36), primary_key=True)
+    session_id = Column(String(36), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Goal content
+    goal_text = Column(Text, nullable=False)
+    status = Column(Enum(GoalStatus), default=GoalStatus.pending, index=True)
+    priority = Column(Integer, default=0)
+
+    # Hierarchy (for subtasks)
+    parent_goal_id = Column(String(36), ForeignKey("session_goals.id", ondelete="CASCADE"), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    session = relationship("ChatSession", back_populates="goals", foreign_keys=[session_id])
+    parent_goal = relationship("SessionGoal", remote_side="SessionGoal.id", backref="sub_goals")
+
+
+class SessionStateCache(Base):
+    """
+    Crash recovery: Persist in-memory state to database.
+    Replaces _chat_stores, _pending_* dicts from chat.py
+    """
+    __tablename__ = "session_state_cache"
+
+    id = Column(String(36), primary_key=True)
+    session_id = Column(String(36), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+
+    # Cached state (JSON serialized) - replaces in-memory dicts
+    pending_stores = Column(JSONB, default=dict)        # Replaces _chat_stores
+    pending_disambiguation = Column(JSONB, default=list)  # Replaces _pending_disambiguation
+    pending_marketing = Column(JSONB, nullable=True)    # Replaces _pending_marketing
+    pending_report = Column(JSONB, nullable=True)       # Replaces _pending_report
+
+    # Esri/map context
+    last_location = Column(JSONB, nullable=True)
+    active_segments = Column(JSONB, default=list)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    session = relationship("ChatSession", back_populates="state_cache")
+
+
+class TokenUsage(Base):
+    """
+    Token usage and cost tracking per request.
+    Enables cost analysis, budgeting, and optimization.
+    """
+    __tablename__ = "token_usage"
+
+    id = Column(String(36), primary_key=True)
+    session_id = Column(String(36), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Request details
+    model = Column(String(100), nullable=False)
+    request_type = Column(String(50), nullable=True)  # chat, embedding, image
+
+    # Token counts
+    input_tokens = Column(Integer, nullable=False)
+    output_tokens = Column(Integer, nullable=False)
+    cached_tokens = Column(Integer, default=0)
+
+    # Cost
+    cost_usd = Column(Numeric(10, 8), nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    session = relationship("ChatSession", back_populates="token_usages")
+    user = relationship("User", backref="token_usages")

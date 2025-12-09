@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 
+    # Sentry Error Monitoring
+    sentry_dsn: str = ""
+    sentry_environment: str = "development"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

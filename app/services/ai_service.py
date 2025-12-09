@@ -1500,3 +1500,104 @@ def build_marketing_response_text(recommendation: MarketingRecommendation) -> st
 **Suggested Platforms:** {platforms_str}
 
 Would you like me to create this as an **Instagram** post, **LinkedIn** post, or another platform? Just let me know which platform, or say "create it" if you'd like me to pick the best one!"""
+
+
+# ============== Context-Aware Chat (Phase 6) ==============
+
+
+async def get_chat_response_with_context(
+    message: str,
+    context: str,
+    session_state: "SessionState | None" = None,
+    use_knowledge_base: bool = True,
+    folder_context: str = "",
+) -> tuple[str, list[str], dict]:
+    """
+    Get AI response using pre-built context with conversation history.
+
+    This is the new context-aware version that:
+    1. Uses stable system prompts for KV-cache optimization
+    2. Includes conversation history from events
+    3. Tracks token usage for cost monitoring
+
+    Args:
+        message: Current user message
+        context: Pre-built context from context_builder_service
+        session_state: Optional session state for stateful flows
+        use_knowledge_base: Whether to search knowledge base
+        folder_context: Additional folder file context
+
+    Returns:
+        Tuple of (response_text, sources, usage_dict)
+    """
+    from app.models.schemas import SessionState  # Import here to avoid circular
+
+    sources: list[str] = []
+    additional_context = ""
+
+    # Add folder files context if provided
+    if folder_context:
+        additional_context += f"\n## Folder Files (Project Context)\n\n{folder_context}\n\n"
+        sources.append("Folder Files")
+
+    # Detect tapestry segment queries and add segment context
+    segment_codes = detect_tapestry_query(message)
+    if segment_codes:
+        segment_context = get_segment_context_for_ai(segment_codes)
+        if segment_context:
+            additional_context += f"\n## Tapestry Segment Information (from Esri)\n\n{segment_context}\n\n"
+            sources.append("Esri Tapestry Segmentation")
+
+    # Search knowledge base if enabled
+    if use_knowledge_base:
+        results = await search_documents(query=message, limit=5)
+        if results:
+            context_parts = []
+            for doc in results:
+                context_parts.append(f"### {doc['title']}\n{doc['content'][:1000]}")
+                sources.append(doc['title'])
+            if context_parts:
+                additional_context += "\n## Knowledge Base Documents\n\n" + "\n\n".join(context_parts)
+
+    # Build final context (pre-built context + additional domain context)
+    final_context = context
+    if additional_context:
+        final_context += additional_context
+
+    if not client:
+        return (
+            "AI responses are not available. Please configure your OpenAI API key in the .env file.",
+            sources,
+            {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0}
+        )
+
+    # Make API call
+    response = await client.chat.completions.create(
+        model=settings.openai_model,
+        messages=[
+            {"role": "system", "content": final_context},
+            {"role": "user", "content": message}
+        ],
+        max_tokens=1000,
+        temperature=0.7,
+    )
+
+    # Extract usage information
+    usage = response.usage
+    usage_dict = {
+        "input_tokens": usage.prompt_tokens if usage else 0,
+        "output_tokens": usage.completion_tokens if usage else 0,
+        "cached_tokens": 0,  # OpenAI doesn't report this directly yet
+        "model": settings.openai_model,
+    }
+
+    # Try to get cached tokens if available (newer API versions)
+    if hasattr(usage, 'prompt_tokens_details') and usage.prompt_tokens_details:
+        cached = getattr(usage.prompt_tokens_details, 'cached_tokens', 0)
+        usage_dict["cached_tokens"] = cached or 0
+
+    return (
+        response.choices[0].message.content or "",
+        sources,
+        usage_dict
+    )

@@ -343,3 +343,240 @@ class FolderChatMessageCreate(BaseModel):
     model_config = {
         "populate_by_name": True,
     }
+
+
+# ============== Context Engineering Schemas ==============
+# Pydantic schemas for session management, events, goals, and context tracking
+
+
+class SessionStatus(str, Enum):
+    """Status of a chat session."""
+    active = "active"
+    paused = "paused"
+    completed = "completed"
+    expired = "expired"
+
+
+class EventType(str, Enum):
+    """Types of events in the event stream."""
+    user = "user"
+    assistant = "assistant"
+    action = "action"
+    observation = "observation"
+    plan = "plan"
+    error = "error"
+
+
+class GoalStatus(str, Enum):
+    """Status of a session goal."""
+    pending = "pending"
+    in_progress = "in_progress"
+    completed = "completed"
+    cancelled = "cancelled"
+
+
+# Session schemas
+class SessionCreate(BaseModel):
+    """Schema for creating a new chat session."""
+    folder_id: Optional[str] = Field(None, alias="folderId")
+    title: Optional[str] = None
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class SessionResponse(BaseModel):
+    """Response schema for chat sessions."""
+    id: str
+    user_id: str = Field(alias="userId")
+    folder_id: Optional[str] = Field(None, alias="folderId")
+    title: Optional[str] = None
+    status: SessionStatus
+    context_window_used: int = Field(0, alias="contextWindowUsed")
+    total_tokens_used: int = Field(0, alias="totalTokensUsed")
+    total_cost: float = Field(0, alias="totalCost")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    last_activity_at: datetime = Field(alias="lastActivityAt")
+    expires_at: Optional[datetime] = Field(None, alias="expiresAt")
+
+    model_config = {
+        "populate_by_name": True,
+        "serialize_by_alias": True,
+    }
+
+
+class SessionListResponse(BaseModel):
+    """Response schema for listing sessions."""
+    sessions: list[SessionResponse]
+    total: int = 0
+
+
+# Event schemas
+class EventCreate(BaseModel):
+    """Schema for creating a session event."""
+    event_type: EventType = Field(alias="eventType")
+    content: dict
+    metadata: Optional[dict] = None
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class EventResponse(BaseModel):
+    """Response schema for session events."""
+    id: str
+    session_id: str = Field(alias="sessionId")
+    sequence_num: int = Field(alias="sequenceNum")
+    event_type: EventType = Field(alias="eventType")
+    content: dict
+    token_count: int = Field(0, alias="tokenCount")
+    cached_tokens: int = Field(0, alias="cachedTokens")
+    metadata: dict = {}
+    created_at: datetime = Field(alias="createdAt")
+
+    model_config = {
+        "populate_by_name": True,
+        "serialize_by_alias": True,
+    }
+
+
+class EventListResponse(BaseModel):
+    """Response schema for listing events."""
+    events: list[EventResponse]
+    total: int = 0
+
+
+# Goal schemas
+class GoalCreate(BaseModel):
+    """Schema for creating a session goal."""
+    goal_text: str = Field(alias="goalText")
+    parent_goal_id: Optional[str] = Field(None, alias="parentGoalId")
+    priority: int = 0
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class GoalUpdate(BaseModel):
+    """Schema for updating a goal."""
+    goal_text: Optional[str] = Field(None, alias="goalText")
+    status: Optional[GoalStatus] = None
+    priority: Optional[int] = None
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class GoalResponse(BaseModel):
+    """Response schema for session goals."""
+    id: str
+    session_id: str = Field(alias="sessionId")
+    goal_text: str = Field(alias="goalText")
+    status: GoalStatus
+    priority: int = 0
+    parent_goal_id: Optional[str] = Field(None, alias="parentGoalId")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    completed_at: Optional[datetime] = Field(None, alias="completedAt")
+
+    model_config = {
+        "populate_by_name": True,
+        "serialize_by_alias": True,
+    }
+
+
+class GoalListResponse(BaseModel):
+    """Response schema for listing goals."""
+    goals: list[GoalResponse]
+
+
+# Workspace file schemas
+class WorkspaceFileResponse(BaseModel):
+    """Response schema for workspace files."""
+    id: str
+    session_id: str = Field(alias="sessionId")
+    reference_key: str = Field(alias="referenceKey")
+    file_type: Optional[str] = Field(None, alias="fileType")
+    size_bytes: Optional[int] = Field(None, alias="sizeBytes")
+    summary: Optional[str] = None
+    metadata: dict = {}
+    created_at: datetime = Field(alias="createdAt")
+
+    model_config = {
+        "populate_by_name": True,
+        "serialize_by_alias": True,
+    }
+
+
+# Token usage schemas
+class TokenUsageResponse(BaseModel):
+    """Response schema for token usage."""
+    id: str
+    session_id: str = Field(alias="sessionId")
+    model: str
+    request_type: Optional[str] = Field(None, alias="requestType")
+    input_tokens: int = Field(alias="inputTokens")
+    output_tokens: int = Field(alias="outputTokens")
+    cached_tokens: int = Field(0, alias="cachedTokens")
+    cost_usd: float = Field(alias="costUsd")
+    created_at: datetime = Field(alias="createdAt")
+
+    model_config = {
+        "populate_by_name": True,
+        "serialize_by_alias": True,
+    }
+
+
+class SessionUsageStats(BaseModel):
+    """Aggregated usage statistics for a session."""
+    session_id: str = Field(alias="sessionId")
+    total_requests: int = Field(alias="totalRequests")
+    total_input_tokens: int = Field(alias="totalInputTokens")
+    total_output_tokens: int = Field(alias="totalOutputTokens")
+    total_cached_tokens: int = Field(alias="totalCachedTokens")
+    total_cost_usd: float = Field(alias="totalCostUsd")
+    cache_hit_rate: float = Field(alias="cacheHitRate")  # 0.0 - 1.0
+
+    model_config = {
+        "populate_by_name": True,
+        "serialize_by_alias": True,
+    }
+
+
+# Context metrics schema
+class ContextMetrics(BaseModel):
+    """Metrics about the current context window."""
+    total_tokens: int = Field(alias="totalTokens")
+    system_tokens: int = Field(alias="systemTokens")
+    history_tokens: int = Field(alias="historyTokens")
+    goals_tokens: int = Field(alias="goalsTokens")
+    available_tokens: int = Field(alias="availableTokens")
+    max_tokens: int = Field(alias="maxTokens")
+    utilization: float  # 0.0 - 1.0
+    cache_hit_estimate: float = Field(alias="cacheHitEstimate")  # 0.0 - 1.0
+
+    model_config = {
+        "populate_by_name": True,
+        "serialize_by_alias": True,
+    }
+
+
+# Session state schema (for crash recovery)
+class SessionState(BaseModel):
+    """In-memory session state that can be persisted."""
+    pending_stores: dict[str, Store] = Field(default_factory=dict, alias="pendingStores")
+    pending_disambiguation: list[MapLocation] = Field(default_factory=list, alias="pendingDisambiguation")
+    pending_marketing: Optional[MarketingRecommendation] = Field(None, alias="pendingMarketing")
+    pending_report: Optional[dict] = Field(None, alias="pendingReport")
+    last_location: Optional[MapLocation] = Field(None, alias="lastLocation")
+    active_segments: list[str] = Field(default_factory=list, alias="activeSegments")
+
+    model_config = {
+        "populate_by_name": True,
+        "serialize_by_alias": True,
+    }

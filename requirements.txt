@@ -12,6 +12,7 @@ asyncpg>=0.30.0
 sqlalchemy>=2.0.36
 pgvector>=0.3.6
 greenlet>=3.0.0
+alembic>=1.13.0  # Database migrations
 
 # Data processing
 pandas>=2.2.3
@@ -27,6 +28,7 @@ playwright>=1.49.0  # Fallback PDF generation when WeasyPrint unavailable
 # AI integrations
 openai>=1.55.0
 google-genai>=0.3.0
+tiktoken>=0.5.0  # Token counting for context management
 
 # Utilities
 python-dotenv>=1.0.1
@@ -40,3 +42,6 @@ python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
 email-validator>=2.0.0
 google-auth>=2.35.0
+
+# Error Monitoring
+sentry-sdk[fastapi]>=2.19.0

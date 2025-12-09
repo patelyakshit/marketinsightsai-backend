@@ -2,8 +2,8 @@
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# startCommand overrides Dockerfile CMD - Railway expands $PORT here
-startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+# Must wrap in shell for $PORT to expand (exec form doesn't expand env vars)
+startCommand = "/bin/sh -c 'exec uvicorn app.main:app --host 0.0.0.0 --port $PORT'"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"

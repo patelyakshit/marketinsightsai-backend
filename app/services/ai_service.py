@@ -806,14 +806,13 @@ REQUIREMENTS:
 
 DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements"""
 
-    # Generate image using Gemini native image generation (Nano Banana Pro)
+    # Generate image using Gemini native image generation
     image_url = None
     if gemini_client:
         try:
-            # Use Gemini 2.5 Flash Image (Nano Banana) for image generation
-            # Alternative: "gemini-3-pro-image-preview" (Nano Banana Pro) for higher quality
+            # Use model from settings (e.g., gemini-2.0-flash-exp-image-generation)
             response = gemini_client.models.generate_content(
-                model="gemini-2.5-flash-image",
+                model=settings.gemini_image_model,
                 contents=[image_prompt],
                 config=types.GenerateContentConfig(
                     response_modalities=["IMAGE", "TEXT"],

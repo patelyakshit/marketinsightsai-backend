@@ -1120,6 +1120,58 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
     )
 
 
+def detect_business_type(store_name: str) -> tuple[str, str]:
+    """
+    Detect the business type/industry from the store name.
+
+    Returns:
+        Tuple of (business_type, business_context)
+        - business_type: Short identifier like "pet store", "restaurant", etc.
+        - business_context: Detailed context for the AI prompt
+    """
+    name_lower = store_name.lower()
+
+    # Pet/Animal stores
+    pet_keywords = ['pet', 'dog', 'cat', 'animal', 'paw', 'bark', 'woof', 'meow', 'puppy',
+                   'kitten', 'pooch', 'canine', 'feline', 'grooming', 'veterinary', 'vet']
+    if any(kw in name_lower for kw in pet_keywords):
+        return "pet store", """This is a PET STORE / PET SERVICES business.
+All recommendations MUST be specific to the pet industry:
+- Products: pet food, treats, toys, accessories, grooming supplies, pet health products
+- Services: grooming, boarding, training, daycare, veterinary referrals
+- Marketing: pet-focused content, pet parent community, pet health tips
+- Promotions: pet adoption events, loyalty programs for pet parents, seasonal pet products
+- DO NOT mention generic retail advice - everything should be pet-specific"""
+
+    # Restaurant/Food
+    food_keywords = ['restaurant', 'cafe', 'coffee', 'pizza', 'burger', 'grill', 'kitchen',
+                    'bakery', 'diner', 'bistro', 'eatery', 'food', 'sushi', 'taco', 'bbq']
+    if any(kw in name_lower for kw in food_keywords):
+        return "restaurant", """This is a RESTAURANT / FOOD SERVICE business.
+All recommendations MUST be specific to the food service industry:
+- Focus: menu optimization, dining experience, delivery/takeout, catering
+- Marketing: food photography, local SEO, review management, loyalty programs
+- Promotions: happy hours, seasonal menus, combo deals, family meals"""
+
+    # Fitness/Gym
+    fitness_keywords = ['gym', 'fitness', 'yoga', 'crossfit', 'workout', 'athletic', 'sport']
+    if any(kw in name_lower for kw in fitness_keywords):
+        return "fitness center", """This is a FITNESS / GYM business.
+All recommendations MUST be specific to fitness industry:
+- Focus: membership retention, class offerings, personal training, community building
+- Marketing: transformation stories, fitness challenges, referral programs"""
+
+    # Retail/Shopping
+    retail_keywords = ['mart', 'store', 'shop', 'outlet', 'boutique', 'market']
+    if any(kw in name_lower for kw in retail_keywords):
+        return "retail store", """This is a RETAIL business.
+Focus recommendations on retail-specific strategies:
+- Inventory, merchandising, customer experience, loyalty programs"""
+
+    # Default - general business
+    return "business", """Provide general business recommendations applicable to this store's trade area."""
+
+
 async def generate_business_insights(
     store_name: str,
     segments: list[dict],
@@ -1140,6 +1192,9 @@ async def generate_business_insights(
     """
     if not client:
         return "Business insights are not available. Please configure your OpenAI API key.", "Unlocking Business Value"
+
+    # Detect business type from store name
+    business_type, business_context = detect_business_type(store_name)
 
     # Build detailed segment descriptions with Esri profile data
     segment_details = []
@@ -1220,25 +1275,29 @@ async def generate_business_insights(
 
     prompt = f"""Analyze the trade area for {store_name} and provide strategic business recommendations based on the TOP 5 lifestyle segments shown below.
 
+BUSINESS TYPE: {business_type.upper()}
+{business_context}
+
 TOP 5 LIFESTYLE SEGMENTS (these are the actual customers in this trade area):
 {segment_descriptions}{goal_focus}
 
-Write a cohesive paragraph (approximately 120 words) with specific, actionable tactics.
+Write a cohesive paragraph (approximately 120 words) with specific, actionable tactics FOR THIS {business_type.upper()}.
 
 REQUIRED FORMAT:
-1. Start with: "The trade area is driven by [reference the top segment names like {segment_names_text}], so focus on [key theme]."
-2. Then provide 4-5 specific tactical recommendations covering: merchandise/product focus, marketing channels, community engagement, convenience/service improvements, and digital engagement
+1. Start with: "The trade area is driven by [reference the top segment names like {segment_names_text}], so focus on [key theme relevant to {business_type}]."
+2. Then provide 4-5 specific tactical recommendations that are DIRECTLY RELEVANT to a {business_type}
 
 CRITICAL RULES:
+- ALL recommendations must be specific to the {business_type} industry - no generic retail advice
 - These segments ARE the customers - do NOT say "no segments" or suggest attracting different demographics
 - Reference the actual segment names and their characteristics in your recommendations
-- Be specific and tactical (e.g., "offer family-friendly merchandise and starter kits" not "consider expanding product range")
+- Be specific and tactical with {business_type}-relevant examples
 - Wrap 4-6 key phrases in <strong> tags for emphasis
 - Write as one flowing paragraph, not bullet points
 - NEVER mention lack of data or missing segments - work with what is provided
-- NEVER use geographic references like "in the South", "in Michigan", "in Texas", "in the Midwest", etc. - the segment descriptions may mention regions but YOUR recommendations should be location-agnostic and applicable to THIS specific trade area regardless of where it is"""
+- NEVER use geographic references like "in the South", "in Michigan", "in Texas", "in the Midwest", etc."""
 
-    system_prompt = f"You are a retail location analytics expert specializing in {goal or 'marketing'} strategy. The segments provided ARE the top 5 customer segments in the trade area - always reference them by name and provide specific recommendations for serving these customers. Write approximately 120 words. IMPORTANT: Never use geographic region references (like 'in the South', 'in Michigan', 'in urban areas') - keep recommendations universally applicable to the lifestyle characteristics, not regional stereotypes."
+    system_prompt = f"You are a {business_type} industry expert and location analytics specialist focusing on {goal or 'marketing'} strategy. The segments provided ARE the top 5 customer segments in the trade area. ALL your recommendations must be specific to the {business_type} industry - never give generic advice. Write approximately 120 words. IMPORTANT: Never use geographic region references - keep recommendations universally applicable to the lifestyle characteristics."
 
     response = await client.chat.completions.create(
         model=settings.openai_model,
@@ -1261,6 +1320,7 @@ async def generate_segment_insight(
     life_mode: str | None = None,
     household_share: float = 0,
     goal: str | None = None,
+    store_name: str | None = None,
 ) -> str:
     """
     Generate a concise AI insight specific to a single segment (50 words).
@@ -1272,6 +1332,7 @@ async def generate_segment_insight(
         life_mode: LifeMode group name
         household_share: Percentage of households
         goal: Optional business goal to focus on
+        store_name: Optional store name to detect business type
 
     Returns:
         Concise 50-word insight for this specific segment
@@ -1279,24 +1340,36 @@ async def generate_segment_insight(
     if not client:
         return f"Insight for {segment_name}: Configure OpenAI API key for AI-generated insights."
 
+    # Detect business type if store name provided
+    business_type = "business"
+    business_context = ""
+    if store_name:
+        business_type, business_context = detect_business_type(store_name)
+
     goal_context = ""
     if goal and goal not in ("generic", "standard"):
         goal_context = f"\nFocus area: {goal}"
 
-    prompt = f"""Generate a brief, actionable business insight for targeting the "{segment_name}" ({segment_code}) demographic segment.
+    prompt = f"""Generate a brief, actionable {business_type.upper()} insight for targeting the "{segment_name}" ({segment_code}) demographic segment.
+
+BUSINESS TYPE: {business_type.upper()}
+{business_context if business_context else ""}
 
 Segment profile: {segment_description[:400]}
 LifeMode: {life_mode or 'N/A'}
 Household share: {household_share:.1f}%{goal_context}
 
-Write EXACTLY 50 words of specific, actionable advice for reaching and engaging this segment. Be direct and practical. Include one specific tactic or channel recommendation.
+Write EXACTLY 50 words of specific, actionable advice for a {business_type} to reach and engage this segment. Be direct and practical. Include one specific {business_type}-relevant tactic.
 
-IMPORTANT: Do NOT use any geographic references like "in the South", "in Michigan", "in Texas", "in urban areas", etc. The segment description may mention regions, but your recommendation should focus on lifestyle characteristics and behaviors, not geographic locations."""
+IMPORTANT:
+- ALL advice must be specific to the {business_type} industry
+- Do NOT use any geographic references like "in the South", "in Michigan", etc.
+- Focus on lifestyle characteristics and behaviors, not geographic locations."""
 
     response = await client.chat.completions.create(
         model=settings.openai_model,
         messages=[
-            {"role": "system", "content": "You are a concise retail marketing expert. Write exactly 50 words, no more, no less. Never mention specific geographic regions (states, regions like 'the South', cities) - focus only on lifestyle and behavioral characteristics."},
+            {"role": "system", "content": f"You are a {business_type} industry expert. Write exactly 50 words of {business_type}-specific advice. Never mention geographic regions - focus only on lifestyle and behavioral characteristics."},
             {"role": "user", "content": prompt}
         ],
         max_tokens=100,

@@ -326,6 +326,7 @@ async def generate_tapestry_report(store: Store, goal: str | None = None) -> str
             life_mode=seg.life_mode,
             household_share=seg.household_share,
             goal=goal,
+            store_name=store.name,  # Pass store name for business type detection
         )
         segment_insights[seg.code] = markdown_to_html(insight)
 
@@ -428,6 +429,7 @@ async def generate_multi_store_report(
                 life_mode=seg.life_mode,
                 household_share=seg.household_share,
                 goal=goal,
+                store_name=store.name,  # Pass store name for business type detection
             )
             segment_insights[seg.code] = markdown_to_html(insight)
 

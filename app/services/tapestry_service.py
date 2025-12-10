@@ -5,12 +5,15 @@ This module handles parsing Esri Tapestry XLSX files and generating
 lifestyle segmentation reports using Jinja2 templates.
 """
 
+import logging
 import io
 import os
 import re
 import uuid
 import base64
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 
 import pandas as pd
@@ -522,5 +525,5 @@ def _generate_pdf_with_playwright(html_path: str) -> bytes | None:
             browser.close()
             return pdf_bytes
     except Exception as e:
-        print(f"Playwright PDF generation failed: {e}")
+        logger.warning(f"Playwright PDF generation failed: {e}")
         return None

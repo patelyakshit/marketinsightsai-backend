@@ -7,9 +7,12 @@ and includes static segment profile data for AI context and report enrichment.
 Data source: ArcGIS Tapestry 2025 (Esri Demographics)
 https://doc.arcgis.com/en/esri-demographics/latest/esri-demographics/tapestry-segmentation.htm
 """
+import logging
 import json
 import httpx
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 from typing import Optional
 from pydantic import BaseModel
 from app.config import get_settings
@@ -879,7 +882,7 @@ async def geocode_location(
     """
     api_key = settings.effective_arcgis_api_key
     if not api_key:
-        print("No ArcGIS API key available for geocoding")
+        logger.warning("No ArcGIS API key available for geocoding")
         return []
 
     params = {
@@ -934,7 +937,7 @@ async def geocode_location(
             return results
 
         except httpx.HTTPError as e:
-            print(f"Geocoding error: {e}")
+            logger.error(f"Geocoding error: {e}")
             return []
 
 
@@ -995,7 +998,7 @@ async def enrich_location(
             return result
 
         except httpx.HTTPError as e:
-            print(f"Esri API error: {e}")
+            logger.error(f"Esri API error: {e}")
             return None
 
 
@@ -1024,7 +1027,7 @@ def _parse_enrich_response(data: dict) -> EnrichmentResult | None:
             median_age=attrs.get("MEDAGE"),
         )
     except Exception as e:
-        print(f"Error parsing Esri response: {e}")
+        logger.warning(f"Error parsing Esri response: {e}")
         return None
 
 
@@ -1143,3 +1146,269 @@ def search_segments_by_name(query: str, limit: int = 5) -> list[SegmentProfile]:
         SegmentProfile(code=code, **data)
         for _, code, data in matches[:limit]
     ]
+
+
+# =============================================================================
+# Direct Tapestry Lookup (Phase 2.2)
+# Real-time Tapestry data from address without file upload
+# =============================================================================
+
+class TapestryLookupResult(BaseModel):
+    """Complete result from a direct Tapestry lookup."""
+    address: str
+    latitude: float
+    longitude: float
+    dominant_segment: SegmentProfile | None = None
+    all_segments: list[dict] = []  # List with percent composition
+    demographics: dict = {}
+    trade_area_radius_miles: float = 1.0
+
+
+async def get_tapestry_by_address(
+    address: str,
+    radius_miles: float = 1.0,
+) -> TapestryLookupResult | None:
+    """
+    Get Tapestry segmentation data for an address.
+
+    This is the main entry point for direct ArcGIS lookups.
+    No file upload required - just provide an address.
+
+    Args:
+        address: Street address, city, or place name
+        radius_miles: Trade area radius (default 1 mile)
+
+    Returns:
+        TapestryLookupResult with full segment data, or None if lookup fails
+    """
+    # Step 1: Geocode the address
+    geocode_results = await geocode_location(address, max_results=1)
+    if not geocode_results:
+        return None
+
+    best_match = geocode_results[0]
+    lat = best_match.location.get("y", 0)
+    lon = best_match.location.get("x", 0)
+
+    # Step 2: Get detailed Tapestry data
+    tapestry_data = await get_detailed_tapestry(lat, lon, radius_miles)
+
+    if not tapestry_data:
+        # Fallback to basic enrichment
+        enrichment = await enrich_location(lat, lon, radius_miles)
+        if enrichment:
+            dominant_profile = get_segment_profile(enrichment.dominant_segment_code)
+            return TapestryLookupResult(
+                address=best_match.address,
+                latitude=lat,
+                longitude=lon,
+                dominant_segment=dominant_profile,
+                all_segments=[{
+                    "code": enrichment.dominant_segment_code,
+                    "name": enrichment.dominant_segment_name,
+                    "percent": 100.0,  # Only have dominant segment
+                }],
+                demographics={
+                    "total_population": enrichment.total_population,
+                    "total_households": enrichment.total_households,
+                    "median_age": enrichment.median_age,
+                },
+                trade_area_radius_miles=radius_miles,
+            )
+        return None
+
+    return TapestryLookupResult(
+        address=best_match.address,
+        latitude=lat,
+        longitude=lon,
+        dominant_segment=tapestry_data.get("dominant_segment"),
+        all_segments=tapestry_data.get("segments", []),
+        demographics=tapestry_data.get("demographics", {}),
+        trade_area_radius_miles=radius_miles,
+    )
+
+
+async def get_detailed_tapestry(
+    latitude: float,
+    longitude: float,
+    radius_miles: float = 1.0,
+) -> dict | None:
+    """
+    Get detailed Tapestry composition for a location.
+
+    Returns multiple segments with their percentage composition,
+    not just the dominant segment.
+
+    Args:
+        latitude: Location latitude
+        longitude: Location longitude
+        radius_miles: Trade area radius
+
+    Returns:
+        Dict with segments list and demographics, or None
+    """
+    api_key = settings.arcgis_api_key
+    if not api_key:
+        return None
+
+    # Cache key
+    cache_key = f"detailed_{latitude:.4f},{longitude:.4f},{radius_miles}"
+    if cache_key in _enrichment_cache:
+        cached_data, cached_time = _enrichment_cache[cache_key]
+        if datetime.now() - cached_time < timedelta(hours=settings.esri_cache_ttl_hours):
+            return cached_data
+
+    study_areas = json.dumps([{
+        "geometry": {"x": longitude, "y": latitude},
+        "areaType": "RingBuffer",
+        "bufferUnits": "esriMiles",
+        "bufferRadii": [radius_miles]
+    }])
+
+    # Request detailed tapestry data including composition
+    # Esri tapestry data collection includes TSEG* variables for all segments
+    params = {
+        "f": "json",
+        "token": api_key,
+        "studyAreas": study_areas,
+        "dataCollections": json.dumps([
+            "tapestry",
+            "KeyUSFacts",
+            "householdincome",
+            "Age"
+        ]),
+        "useData": json.dumps({"sourceCountry": "US"}),
+        "returnGeometry": "false",
+    }
+
+    async with await get_esri_client() as client:
+        try:
+            response = await client.post(
+                f"{settings.esri_geoenrich_base_url}/Enrich",
+                data=params
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            result = _parse_detailed_tapestry(data)
+            if result:
+                _enrichment_cache[cache_key] = (result, datetime.now())
+            return result
+
+        except httpx.HTTPError as e:
+            logger.error(f"Detailed Tapestry API error: {e}")
+            return None
+
+
+def _parse_detailed_tapestry(data: dict) -> dict | None:
+    """Parse detailed Tapestry response with all segment percentages."""
+    try:
+        results = data.get("results", [])
+        if not results:
+            return None
+
+        feature_set = results[0].get("value", {}).get("FeatureSet", [])
+        if not feature_set:
+            return None
+
+        features = feature_set[0].get("features", [])
+        if not features:
+            return None
+
+        attrs = features[0].get("attributes", {})
+
+        # Extract all tapestry segments with percentages
+        segments = []
+        for code in SEGMENT_PROFILES.keys():
+            # Esri uses variables like TSEGAHH_A1 for household percentage
+            percent_key = f"TSEGAHH_{code}"
+            if percent_key in attrs:
+                percent = attrs.get(percent_key, 0)
+                if percent and percent > 0:
+                    profile = get_segment_profile(code)
+                    segments.append({
+                        "code": code,
+                        "name": profile.name if profile else code,
+                        "life_mode": profile.life_mode if profile else "",
+                        "percent": round(percent, 2),
+                    })
+
+        # Sort by percentage descending
+        segments.sort(key=lambda x: x["percent"], reverse=True)
+
+        # Get dominant segment profile
+        dominant_code = attrs.get("TSEGCODE", "")
+        dominant_profile = get_segment_profile(dominant_code) if dominant_code else None
+
+        # If we didn't get segment percentages, use dominant segment at 100%
+        if not segments and dominant_code:
+            segments = [{
+                "code": dominant_code,
+                "name": attrs.get("TSEGNAME", dominant_code),
+                "life_mode": dominant_profile.life_mode if dominant_profile else "",
+                "percent": 100.0,
+            }]
+
+        # Extract demographics
+        demographics = {
+            "total_population": attrs.get("TOTPOP"),
+            "total_households": attrs.get("TOTHH"),
+            "median_age": attrs.get("MEDAGE"),
+            "median_household_income": attrs.get("MEDHINC"),
+            "average_household_income": attrs.get("AVGHINC"),
+            "per_capita_income": attrs.get("PCI"),
+            "median_home_value": attrs.get("MEDVAL"),
+        }
+
+        # Clean None values
+        demographics = {k: v for k, v in demographics.items() if v is not None}
+
+        return {
+            "dominant_segment": dominant_profile,
+            "segments": segments[:15],  # Top 15 segments
+            "demographics": demographics,
+        }
+
+    except Exception as e:
+        logger.warning(f"Error parsing detailed Tapestry: {e}")
+        return None
+
+
+async def get_tapestry_comparison(
+    locations: list[dict],
+    radius_miles: float = 1.0,
+) -> list[TapestryLookupResult]:
+    """
+    Compare Tapestry data across multiple locations.
+
+    Args:
+        locations: List of dicts with 'address' or 'lat'/'lon' keys
+        radius_miles: Trade area radius for all locations
+
+    Returns:
+        List of TapestryLookupResult for each location
+    """
+    import asyncio
+
+    async def lookup_location(loc: dict) -> TapestryLookupResult | None:
+        if "address" in loc:
+            return await get_tapestry_by_address(loc["address"], radius_miles)
+        elif "lat" in loc and "lon" in loc:
+            # Direct coordinate lookup
+            result = await get_detailed_tapestry(loc["lat"], loc["lon"], radius_miles)
+            if result:
+                return TapestryLookupResult(
+                    address=f"{loc['lat']:.4f}, {loc['lon']:.4f}",
+                    latitude=loc["lat"],
+                    longitude=loc["lon"],
+                    dominant_segment=result.get("dominant_segment"),
+                    all_segments=result.get("segments", []),
+                    demographics=result.get("demographics", {}),
+                    trade_area_radius_miles=radius_miles,
+                )
+        return None
+
+    tasks = [lookup_location(loc) for loc in locations]
+    results = await asyncio.gather(*tasks)
+
+    return [r for r in results if r is not None]

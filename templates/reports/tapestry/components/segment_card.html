@@ -57,7 +57,7 @@
         </div>
         <div class="stat-box stat-box-secondary" style="background: {{ seg_color }}0D; color: {{ seg_color }};">
             <span class="stat-box-value">{{ segment.life_stage or 'N/A' }}</span>
-            <span class="stat-box-label">Life Stage</span>
+            <span class="stat-box-label">LifeStage</span>
         </div>
     </div>
 
@@ -75,7 +75,7 @@
     {% if segment_insights and segment_insights.get(segment.code) %}
     <div class="segment-insight-box">
         <div class="segment-insight-header">
-            <span>Unlock Business Insights</span>
+            <span>Engaging This Segment</span>
             <span class="insights-scope">For {{ segment.code }}</span>
         </div>
         <div class="segment-insight-content">

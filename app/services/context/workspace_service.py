@@ -8,10 +8,11 @@ Stores large observations externally, keeps only references in context window.
 import hashlib
 import os
 import uuid
-from datetime import datetime
 from typing import Optional, Union
 
 from sqlalchemy import select, delete
+
+from app.utils.datetime_utils import utc_now
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import SessionWorkspaceFile
@@ -380,7 +381,7 @@ async def store_api_response(
     from datetime import datetime
 
     # Generate reference key
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
     reference_key = f"{api_name}_{timestamp}.json"
 
     # Serialize response

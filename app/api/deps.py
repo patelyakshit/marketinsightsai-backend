@@ -61,3 +61,27 @@ async def get_current_user(
 
 # Type alias for dependency injection
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_user_ws(
+    token: str,
+    db: AsyncSession,
+) -> User | None:
+    """
+    Get current user from a token for WebSocket connections.
+    Returns None if invalid (WebSocket should close gracefully).
+    """
+    payload = decode_token(token)
+
+    if not payload:
+        return None
+
+    if payload.get("type") != "access":
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()

@@ -1,11 +1,12 @@
-from datetime import datetime
 import os
+import enum
+
 from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, Enum, JSON, ForeignKey, Numeric, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
-import enum
 
 from app.db.database import Base
+from app.utils.datetime_utils import utc_now
 
 # Use Text type for embeddings if pgvector is disabled (store as JSON string)
 # This allows the app to work without pgvector, just without vector search
@@ -34,8 +35,8 @@ class User(Base):
     avatar_url = Column(String(500), nullable=True)  # For Google profile picture
     google_id = Column(String(255), nullable=True, unique=True, index=True)  # Google OAuth ID
     auth_provider = Column(String(50), nullable=True, default="email")  # 'email' or 'google'
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     saved_reports = relationship("SavedReport", back_populates="user")
@@ -49,7 +50,7 @@ class Team(Base):
     id = Column(String(36), primary_key=True)
     name = Column(String(255), nullable=False)
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     owner = relationship("User", back_populates="owned_teams", foreign_keys=[owner_id])
@@ -72,7 +73,7 @@ class TeamMember(Base):
     team_id = Column(String(36), ForeignKey("teams.id"), nullable=False)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     role = Column(Enum(TeamRole), nullable=False, default=TeamRole.member)
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(DateTime, default=utc_now)
 
     # Relationships
     team = relationship("Team", back_populates="members")
@@ -90,7 +91,7 @@ class SavedReport(Base):
     goal = Column(String(100), nullable=False)
     report_url = Column(Text, nullable=False)
     report_html = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     user = relationship("User", back_populates="saved_reports")
@@ -108,8 +109,8 @@ class ReportTemplate(Base):
     goal = Column(String(100), nullable=False)
     config = Column(JSON, default=dict)
     is_default = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     team = relationship("Team", back_populates="report_templates")
@@ -136,8 +137,8 @@ class Workspace(Base):
     id = Column(String(36), primary_key=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     documents = relationship("KnowledgeDocument", back_populates="workspace")
 
@@ -152,8 +153,8 @@ class KnowledgeDocument(Base):
     content = Column(Text, nullable=False)
     doc_metadata = Column("metadata", JSON, default=dict)  # renamed to avoid SQLAlchemy reserved name
     embedding = Column(VECTOR_TYPE, nullable=True)  # OpenAI embedding dimension
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     workspace = relationship("Workspace", back_populates="documents")
 
@@ -171,8 +172,8 @@ class TapestrySegment(Base):
     median_household_income = Column(Float, nullable=True)
     median_net_worth = Column(Float, nullable=True)
     homeownership_rate = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class Store(Base):
@@ -184,8 +185,8 @@ class Store(Base):
     address = Column(String(500), nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     segment_data = relationship("StoreSegmentData", back_populates="store")
 
@@ -198,7 +199,7 @@ class StoreSegmentData(Base):
     segment_code = Column(String(10), ForeignKey("tapestry_segments.code"), nullable=False)
     household_share = Column(Float, nullable=False)
     household_count = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     store = relationship("Store", back_populates="segment_data")
 
@@ -210,7 +211,7 @@ class GeneratedReport(Base):
     store_id = Column(String(36), ForeignKey("stores.id"), nullable=False)
     file_path = Column(String(500), nullable=False)
     file_type = Column(String(10), default="pdf")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 # ============== Folder (Project) Models ==============
@@ -224,8 +225,8 @@ class Folder(Base):
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     user = relationship("User", backref="folders")
@@ -255,7 +256,7 @@ class FolderFile(Base):
     file_path = Column(String(500), nullable=False)  # Storage path
     content_preview = Column(Text, nullable=True)  # For text files, store preview
     file_metadata = Column("metadata", JSON, default=dict)  # Parsed data (e.g., store names from xlsx)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     folder = relationship("Folder", back_populates="files")
@@ -268,8 +269,8 @@ class FolderChat(Base):
     id = Column(String(36), primary_key=True)
     folder_id = Column(String(36), ForeignKey("folders.id"), nullable=False)
     title = Column(String(255), nullable=True)  # Auto-generated from first message
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     folder = relationship("Folder", back_populates="chats")
@@ -285,7 +286,7 @@ class FolderChatMessage(Base):
     role = Column(String(20), nullable=False)  # 'user', 'assistant', 'system'
     content = Column(Text, nullable=False)
     image_url = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     chat = relationship("FolderChat", back_populates="messages")
@@ -343,9 +344,9 @@ class ChatSession(Base):
     expires_at = Column(DateTime, nullable=True, index=True)  # Auto-cleanup after TTL
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_activity_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+    last_activity_at = Column(DateTime, default=utc_now)
 
     # Relationships
     user = relationship("User", backref="chat_sessions")
@@ -379,7 +380,7 @@ class SessionEvent(Base):
 
     # Metadata
     event_metadata = Column("metadata", JSONB, default=dict)  # Action results, error traces, etc.
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     session = relationship("ChatSession", back_populates="events")
@@ -413,7 +414,7 @@ class SessionWorkspaceFile(Base):
     summary = Column(Text, nullable=True)  # Brief description for context
     file_metadata = Column("metadata", JSONB, default=dict)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     session = relationship("ChatSession", back_populates="workspace_files")
@@ -437,8 +438,8 @@ class SessionGoal(Base):
     # Hierarchy (for subtasks)
     parent_goal_id = Column(String(36), ForeignKey("session_goals.id", ondelete="CASCADE"), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     completed_at = Column(DateTime, nullable=True)
 
     # Relationships
@@ -466,7 +467,7 @@ class SessionStateCache(Base):
     last_location = Column(JSONB, nullable=True)
     active_segments = Column(JSONB, default=list)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     session = relationship("ChatSession", back_populates="state_cache")
@@ -495,7 +496,7 @@ class TokenUsage(Base):
     # Cost
     cost_usd = Column(Numeric(10, 8), nullable=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
 
     # Relationships
     session = relationship("ChatSession", back_populates="token_usages")

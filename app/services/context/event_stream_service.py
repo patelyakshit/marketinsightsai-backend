@@ -8,10 +8,11 @@ Implements append-only design for KV-cache optimization.
 import json
 import uuid
 import traceback
-from datetime import datetime
 from typing import Optional, Any
 
 from sqlalchemy import select, func
+
+from app.utils.datetime_utils import utc_now
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import SessionEvent, EventType, ChatSession
@@ -87,7 +88,7 @@ async def append_event(
     )
     session = result.scalar_one_or_none()
     if session:
-        session.last_activity_at = datetime.utcnow()
+        session.last_activity_at = utc_now()
 
     await db.commit()
     await db.refresh(event)

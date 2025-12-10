@@ -1,5 +1,11 @@
+import logging
+import warnings
 from pydantic_settings import BaseSettings
+from pydantic import field_validator, model_validator
 from functools import lru_cache
+from typing import Self
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -49,6 +55,74 @@ class Settings(BaseSettings):
     # Sentry Error Monitoring
     sentry_dsn: str = ""
     sentry_environment: str = "development"
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """Validate database URL format."""
+        if not v:
+            raise ValueError("DATABASE_URL is required")
+        if not v.startswith(("postgresql://", "postgresql+asyncpg://")):
+            raise ValueError("DATABASE_URL must be a PostgreSQL connection string")
+        return v
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def validate_jwt_secret(cls, v: str) -> str:
+        """Warn if using default JWT secret in production."""
+        if v == "your-super-secret-key-change-in-production":
+            warnings.warn(
+                "Using default JWT secret! Set JWT_SECRET environment variable in production.",
+                UserWarning,
+                stacklevel=2,
+            )
+        elif len(v) < 32:
+            warnings.warn(
+                f"JWT_SECRET is only {len(v)} characters. Recommend at least 32 characters.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return v
+
+    @model_validator(mode="after")
+    def validate_config(self) -> Self:
+        """Validate configuration at startup and warn about missing optional configs."""
+        missing_warnings = []
+
+        # Check critical API keys
+        if not self.openai_api_key:
+            missing_warnings.append("OPENAI_API_KEY not set - AI chat features will not work")
+
+        if not self.google_client_id:
+            missing_warnings.append("GOOGLE_CLIENT_ID not set - Google OAuth disabled")
+
+        if not self.google_api_key:
+            missing_warnings.append("GOOGLE_API_KEY not set - image generation disabled")
+
+        if not self.effective_arcgis_api_key:
+            missing_warnings.append("No ArcGIS API key set - geocoding/demographics disabled")
+
+        # Log warnings for missing configs
+        for warning in missing_warnings:
+            logger.warning(f"Config: {warning}")
+
+        # Log info about configured features
+        configured = []
+        if self.openai_api_key:
+            configured.append("OpenAI")
+        if self.google_client_id:
+            configured.append("Google OAuth")
+        if self.google_api_key:
+            configured.append("Imagen 3")
+        if self.effective_arcgis_api_key:
+            configured.append("ArcGIS")
+        if self.sentry_dsn:
+            configured.append("Sentry")
+
+        if configured:
+            logger.info(f"Config: Enabled features - {', '.join(configured)}")
+
+        return self
 
     class Config:
         env_file = ".env"

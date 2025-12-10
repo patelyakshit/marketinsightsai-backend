@@ -1,12 +1,13 @@
 import uuid
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 from app.db.database import get_db
+from app.middleware.rate_limit import limiter
 from app.db.models import User
 from app.models.auth_schemas import (
     UserRegister,
@@ -33,11 +34,13 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     data: UserRegister,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    """Register a new user account."""
+    """Register a new user account. Rate limited to 5 per minute."""
     try:
         # Check if email already exists
         result = await db.execute(select(User).where(User.email == data.email))
@@ -83,11 +86,13 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     data: UserLogin,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    """Login with email and password."""
+    """Login with email and password. Rate limited to 10 per minute."""
     # Find user by email
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
@@ -115,11 +120,13 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("30/minute")
 async def refresh_token(
+    request: Request,
     data: RefreshTokenRequest,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    """Refresh access token using a valid refresh token."""
+    """Refresh access token using a valid refresh token. Rate limited to 30 per minute."""
     payload = decode_token(data.refresh_token)
 
     if not payload or payload.get("type") != "refresh":
@@ -170,11 +177,13 @@ async def get_current_user_info(current_user: CurrentUser):
 
 
 @router.post("/google", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def google_auth(
+    request: Request,
     data: GoogleAuthRequest,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    """Authenticate with Google Sign-In.
+    """Authenticate with Google Sign-In. Rate limited to 10 per minute.
 
     This endpoint handles both sign-in and sign-up:
     - If user exists with this Google ID, sign them in

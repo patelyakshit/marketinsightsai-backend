@@ -1,6 +1,10 @@
+import logging
 import os
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi.responses import StreamingResponse
 from typing import Optional, Annotated
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -12,7 +16,7 @@ from app.models.schemas import (
     MarketingAction, MarketingActionType, MarketingRecommendation, MarketingPlatform,
 )
 from app.services.ai_service import (
-    get_chat_response, generate_image,
+    get_chat_response, get_chat_response_streaming, generate_image,
     detect_map_command, handle_map_command, handle_disambiguation_choice,
     detect_marketing_request, detect_approval_response, detect_report_request,
     detect_business_goal,
@@ -90,7 +94,7 @@ async def get_folder_files_context(folder_id: str, db: AsyncSession) -> tuple[st
             else:
                 context_parts.append(f"**File: {file.original_filename}** - Binary file, content not available")
         except Exception as e:
-            print(f"Error reading file {file.original_filename}: {e}")
+            logger.warning(f"Error reading file {file.original_filename}: {e}")
             context_parts.append(f"**File: {file.original_filename}** - Error reading content")
 
     if not context_parts:
@@ -147,9 +151,9 @@ async def chat_with_file(
             try:
                 folder_context, folder_file_names = await get_folder_files_context(folder_id, db)
                 if folder_file_names:
-                    print(f"Loaded {len(folder_file_names)} files from folder {folder_id}: {folder_file_names}")
+                    logger.debug(f"Loaded {len(folder_file_names)} files from folder {folder_id}: {folder_file_names}")
             except Exception as e:
-                print(f"Error loading folder files: {e}")
+                logger.warning(f"Error loading folder files: {e}")
 
         # Restore stores from frontend if provided (handles server restart case)
         if stores_json:
@@ -183,7 +187,7 @@ async def chat_with_file(
                     )
                     _chat_stores[store.id] = store
             except Exception as e:
-                print(f"Failed to restore stores from frontend: {e}")
+                logger.warning(f"Failed to restore stores from frontend: {e}")
 
         # Restore pending marketing recommendation from frontend (handles server restart)
         if pending_marketing_json:
@@ -210,7 +214,7 @@ async def chat_with_file(
                 )
                 _pending_marketing["latest"] = recommendation
             except Exception as e:
-                print(f"Failed to restore pending marketing from frontend: {e}")
+                logger.warning(f"Failed to restore pending marketing from frontend: {e}")
 
         # Handle pending report flow (two-step: store selection -> goal selection)
         if "latest" in _pending_report:
@@ -713,8 +717,8 @@ Respond naturally about what you found. Mention key insights from the data and s
         # Log the full error for debugging
         import traceback
         error_trace = traceback.format_exc()
-        print(f"Error in chat_with_file: {str(e)}")
-        print(f"Traceback: {error_trace}")
+        logger.error(f"Error in chat_with_file: {str(e)}")
+        logger.error(f"Traceback: {error_trace}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
@@ -732,3 +736,34 @@ async def generate_image_endpoint(request: ImageGenerationRequest):
 async def get_chat_stores():
     """Get all stores uploaded via chat."""
     return {"stores": list(_chat_stores.values())}
+
+
+@router.post("/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Stream a chat response token by token.
+
+    Returns a text/event-stream response with chunks of the AI response.
+    The final chunk contains sources as JSON with __SOURCES__ prefix.
+    """
+    async def generate():
+        try:
+            async for chunk in get_chat_response_streaming(
+                message=request.message,
+                use_knowledge_base=request.use_knowledge_base
+            ):
+                # Send each chunk as a Server-Sent Event
+                yield f"data: {chunk}\n\n"
+        except Exception as e:
+            yield f"data: Error: {str(e)}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )

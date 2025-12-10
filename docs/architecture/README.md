@@ -195,6 +195,6 @@ See [Multi-Agent Architecture](./multi-agent.md) for planned improvements:
 
 ## Related Documents
 
-- [Multi-Agent Architecture](./multi-agent.md) - Planned agent coordination
-- [Context Engineering](./context-engineering.md) - AI context management
-- [Data Flow](./data-flow.md) - Detailed data flow diagrams
+- [Implementation Tracker](../IMPLEMENTATION_TRACKER.md) - Master progress document
+- [AI Agent Patterns](../research/ai-agent-patterns.md) - Research on agent architecture
+- [Feature Roadmap](../roadmap/README.md) - Development phases

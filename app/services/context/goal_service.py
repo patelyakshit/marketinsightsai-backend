@@ -7,10 +7,11 @@ Goals are placed at the END of context to combat "lost-in-the-middle" effect.
 
 import re
 import uuid
-from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import select, update
+
+from app.utils.datetime_utils import utc_now
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import SessionGoal, GoalStatus
@@ -157,14 +158,14 @@ async def update_goal(
     if status is not None:
         goal.status = status
         if status == GoalStatus.completed:
-            goal.completed_at = datetime.utcnow()
+            goal.completed_at = utc_now()
         elif status != GoalStatus.completed and goal.completed_at:
             goal.completed_at = None
 
     if priority is not None:
         goal.priority = priority
 
-    goal.updated_at = datetime.utcnow()
+    goal.updated_at = utc_now()
 
     await db.commit()
     await db.refresh(goal)

@@ -7,13 +7,13 @@ import os
 import uuid
 import shutil
 from typing import Annotated
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from app.utils.datetime_utils import utc_now
 from app.db.database import get_db
 from app.db.models import Folder, FolderFile, FolderChat, FolderChatMessage, FolderFileType as DBFolderFileType
 from app.api.deps import CurrentUser
@@ -182,7 +182,7 @@ async def update_folder(
     if folder_data.description is not None:
         folder.description = folder_data.description
 
-    folder.updated_at = datetime.utcnow()
+    folder.updated_at = utc_now()
     await db.commit()
     await db.refresh(folder)
 
@@ -272,7 +272,7 @@ async def upload_file(
     db.add(db_file)
 
     # Update folder timestamp
-    folder.updated_at = datetime.utcnow()
+    folder.updated_at = utc_now()
 
     await db.commit()
     await db.refresh(db_file)
@@ -406,7 +406,7 @@ async def create_chat(
     db.add(chat)
 
     # Update folder timestamp
-    folder.updated_at = datetime.utcnow()
+    folder.updated_at = utc_now()
 
     await db.commit()
     await db.refresh(chat)

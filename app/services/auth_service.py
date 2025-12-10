@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import bcrypt
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import PyJWTError
 from app.config import get_settings
 
 settings = get_settings()
@@ -23,7 +24,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(user_id: str, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.jwt_access_token_expire_minutes))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.jwt_access_token_expire_minutes))
     to_encode = {
         "sub": user_id,
         "exp": expire,
@@ -34,7 +35,7 @@ def create_access_token(user_id: str, expires_delta: timedelta | None = None) ->
 
 def create_refresh_token(user_id: str) -> str:
     """Create a JWT refresh token with longer expiry."""
-    expire = datetime.utcnow() + timedelta(days=settings.jwt_refresh_token_expire_days)
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_token_expire_days)
     to_encode = {
         "sub": user_id,
         "exp": expire,
@@ -48,7 +49,7 @@ def decode_token(token: str) -> dict | None:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         return payload
-    except JWTError:
+    except PyJWTError:
         return None
 
 

@@ -6,11 +6,13 @@ Uses tiktoken for accurate token counting with OpenAI models.
 """
 
 import uuid
-from datetime import datetime
+from datetime import timedelta
 from decimal import Decimal
 from typing import Optional
 
 import tiktoken
+
+from app.utils.datetime_utils import utc_now
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -260,7 +262,7 @@ async def record_usage(
     if session:
         session.total_tokens_used = (session.total_tokens_used or 0) + input_tokens + output_tokens
         session.total_cost = Decimal(str(float(session.total_cost or 0) + cost))
-        session.last_activity_at = datetime.utcnow()
+        session.last_activity_at = utc_now()
 
     await db.commit()
     await db.refresh(usage)
@@ -331,7 +333,7 @@ async def get_user_usage(
     """
     from datetime import timedelta
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = utc_now() - timedelta(days=days)
 
     result = await db.execute(
         select(

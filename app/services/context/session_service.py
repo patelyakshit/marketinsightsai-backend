@@ -6,11 +6,13 @@ Sessions are tied to authenticated users and optionally to folders.
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import select, update, delete
+
+from app.utils.datetime_utils import utc_now
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -46,7 +48,7 @@ async def create_session(
         Created ChatSession
     """
     session_id = str(uuid.uuid4())
-    expires_at = datetime.utcnow() + timedelta(days=ttl_days)
+    expires_at = utc_now() + timedelta(days=ttl_days)
 
     session = ChatSession(
         id=session_id,
@@ -163,7 +165,7 @@ async def get_or_create_session(
         session = await get_session(db, session_id, user_id)
         if session and session.status == SessionStatus.active:
             # Update last activity
-            session.last_activity_at = datetime.utcnow()
+            session.last_activity_at = utc_now()
             await db.commit()
             return session
 
@@ -333,7 +335,7 @@ async def save_session_state(
         cache.pending_report = state.pending_report
         cache.last_location = last_location_json
         cache.active_segments = state.active_segments
-        cache.updated_at = datetime.utcnow()
+        cache.updated_at = utc_now()
     else:
         cache = SessionStateCache(
             id=str(uuid.uuid4()),
@@ -382,8 +384,8 @@ async def update_session_metrics(
         if cost is not None:
             session.total_cost = Decimal(str(float(session.total_cost or 0) + cost))
 
-        session.last_activity_at = datetime.utcnow()
-        session.updated_at = datetime.utcnow()
+        session.last_activity_at = utc_now()
+        session.updated_at = utc_now()
 
         await db.commit()
 
@@ -410,7 +412,7 @@ async def update_session_status(
 
     if session:
         session.status = status
-        session.updated_at = datetime.utcnow()
+        session.updated_at = utc_now()
         await db.commit()
         await db.refresh(session)
 
@@ -458,7 +460,7 @@ async def expire_stale_sessions(
     Returns:
         Number of sessions expired
     """
-    now = datetime.utcnow()
+    now = utc_now()
 
     result = await db.execute(
         update(ChatSession)
@@ -492,7 +494,7 @@ async def cleanup_expired_sessions(
     Returns:
         Number of sessions deleted
     """
-    cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+    cutoff = utc_now() - timedelta(days=older_than_days)
 
     # Find sessions to delete
     result = await db.execute(

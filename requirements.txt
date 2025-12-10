@@ -25,6 +25,9 @@ markdown>=3.7
 weasyprint>=63.0
 playwright>=1.49.0  # Fallback PDF generation when WeasyPrint unavailable
 
+# Presentation generation
+python-pptx>=1.0.0  # PowerPoint PPTX generation
+
 # AI integrations
 openai>=1.55.0
 google-genai>=0.3.0
@@ -38,10 +41,13 @@ httpx>=0.28.0
 Jinja2>=3.1.0
 
 # Authentication
-python-jose[cryptography]>=3.3.0
+PyJWT[crypto]>=2.8.0
 bcrypt>=4.0.0
 email-validator>=2.0.0
 google-auth>=2.35.0
 
 # Error Monitoring
 sentry-sdk[fastapi]>=2.19.0
+
+# Rate Limiting
+slowapi>=0.1.9

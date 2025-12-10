@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Google Gemini (for image generation)
     google_api_key: str = ""
-    gemini_image_model: str = "imagen-3.0-generate-002"  # Imagen 3 for generate_images() API
+    gemini_image_model: str = "gemini-3-pro-image-preview"  # Latest Gemini model with image generation
 
     # Google OAuth
     google_client_id: str = ""
@@ -121,7 +121,7 @@ class Settings(BaseSettings):
         if self.google_client_id:
             configured.append("Google OAuth")
         if self.google_api_key:
-            configured.append("Imagen 3")
+            configured.append("Gemini Image")
         if self.effective_arcgis_api_key:
             configured.append("ArcGIS")
         if self.sentry_dsn:

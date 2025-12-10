@@ -1187,13 +1187,14 @@ def detect_marketing_request(
     """
     message_lower = message.lower().strip()
 
-    # Marketing request patterns
+    # Marketing request patterns (including common typos like "pot" for "post")
     marketing_patterns = [
-        r"(?:create|make|generate|design|build)\s+(?:a\s+)?(?:marketing|social media|promotional?|ad|advertisement)\s+(?:post|content|image|creative)",
-        r"(?:marketing|social media|promotional?)\s+(?:post|content|image|creative)\s+(?:for|about)",
-        r"(?:instagram|linkedin|facebook|twitter|x)\s+(?:post|content|image|creative)",
-        r"(?:post|content|image|creative)\s+(?:for|on)\s+(?:instagram|linkedin|facebook|twitter|x)",
-        r"(?:create|make|generate)\s+(?:post|content|image)\s+for\s+(?:social media|marketing)",
+        r"(?:create|make|generate|design|build)\s+(?:a\s+)?(?:marketing|social media|promotional?|ad|advertisement)\s+(?:post|pot|content|image|creative)",
+        r"(?:marketing|social media|promotional?)\s+(?:post|pot|content|image|creative)\s+(?:for|about)",
+        r"(?:instagram|linkedin|facebook|twitter|x)\s+(?:post|pot|content|image|creative)",
+        r"(?:post|pot|content|image|creative)\s+(?:for|on)\s+(?:instagram|linkedin|facebook|twitter|x)",
+        r"(?:create|make|generate)\s+(?:post|pot|content|image)\s+for\s+(?:social media|marketing)",
+        r"(?:generate|create|make)\s+(?:a\s+)?marketing\s+(?:post|pot)",  # "generate marketing post"
     ]
 
     is_marketing = any(re.search(pattern, message_lower) for pattern in marketing_patterns)
@@ -1215,15 +1216,32 @@ def detect_marketing_request(
     # Try to find store reference
     store_ref = None
     if available_stores:
-        # Check for store name mentions
-        for store_id, store in available_stores.items():
-            if store.name.lower() in message_lower:
-                store_ref = store_id
-                break
-            # Also check store number if available
-            if store.store_number and store.store_number.lower() in message_lower:
-                store_ref = store_id
-                break
+        # First, check for "store #XXX" or "store XXX" patterns
+        store_num_match = re.search(r'store\s*#?\s*(\d+)', message_lower)
+        if store_num_match:
+            store_num = store_num_match.group(1)
+            # Look for this number in store_number field
+            for store_id, store in available_stores.items():
+                if store.store_number and store_num in store.store_number:
+                    store_ref = store_id
+                    break
+
+        # If not found by number, use fuzzy matching on store names
+        if not store_ref:
+            exact_match_ids, _ = find_store_mentions_fuzzy(message, available_stores)
+            if exact_match_ids:
+                store_ref = exact_match_ids[0]
+
+        # Check for exact store name mentions
+        if not store_ref:
+            for store_id, store in available_stores.items():
+                if store.name.lower() in message_lower:
+                    store_ref = store_id
+                    break
+                # Also check store number if available
+                if store.store_number and store.store_number.lower() in message_lower:
+                    store_ref = store_id
+                    break
 
         # If no specific store found but only one store available, use it
         if not store_ref and len(available_stores) == 1:

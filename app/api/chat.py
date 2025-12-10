@@ -598,8 +598,16 @@ Respond naturally about what you found. Mention key insights from the data and s
                 store = list(_chat_stores.values())[0]
 
             if not store:
+                # Build a helpful message based on what data we have
+                if _chat_stores:
+                    store_names = [s.name for s in list(_chat_stores.values())[:5]]
+                    store_list = ", ".join(store_names)
+                    more_text = f" and {len(_chat_stores) - 5} more" if len(_chat_stores) > 5 else ""
+                    response = f"I couldn't find the store you mentioned. You have {len(_chat_stores)} stores loaded: {store_list}{more_text}. Please specify the exact store name, for example: 'generate marketing post for {store_names[0]}'"
+                else:
+                    response = "I'd love to help create a marketing post, but I need store data first. Please upload a tapestry file with store segment information, then ask me to create a marketing post."
                 return AIChatResponse(
-                    response="I'd love to help create a marketing post, but I need store data first. Please upload a tapestry file with store segment information, then ask me to create a marketing post.",
+                    response=response,
                     sources=[],
                     stores=list(_chat_stores.values()) if _chat_stores else [],
                 )

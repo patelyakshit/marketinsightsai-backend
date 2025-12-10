@@ -156,9 +156,11 @@ async def chat_with_file(
                 logger.warning(f"Error loading folder files: {e}")
 
         # Restore stores from frontend if provided (handles server restart case)
+        logger.info(f"Chat request - stores_json provided: {stores_json is not None}, existing _chat_stores count: {len(_chat_stores)}")
         if stores_json:
             try:
                 stores_data = json.loads(stores_json)
+                logger.info(f"Restoring {len(stores_data)} stores from frontend")
                 for store_data in stores_data:
                     # Handle both camelCase (from frontend) and snake_case field names
                     segments = []

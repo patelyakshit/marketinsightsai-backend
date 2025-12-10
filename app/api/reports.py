@@ -1,5 +1,7 @@
 import os
-from fastapi import APIRouter, UploadFile, File, HTTPException
+import httpx
+import tempfile
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from app.models.schemas import TapestryUploadResponse, ReportGenerateRequest, ReportGenerateResponse
 from app.services.tapestry_service import parse_tapestry_xlsx, generate_tapestry_report, generate_pdf_from_html
@@ -149,3 +151,112 @@ async def get_generated_image(filename: str):
         raise HTTPException(status_code=404, detail="Generated image not found")
 
     return FileResponse(file_path, media_type="image/png")
+
+
+@router.get("/proxy-html")
+async def proxy_html(url: str = Query(..., description="URL of HTML to proxy for iframe display")):
+    """Proxy an HTML page from a URL for iframe display.
+
+    This endpoint fetches HTML content from a given URL (e.g., Supabase Storage)
+    and serves it with proper Content-Type headers for iframe rendering.
+
+    Args:
+        url: The URL of the HTML page to proxy
+
+    Returns:
+        HTML content with proper headers
+    """
+    # Validate URL - only allow Supabase and our own domain
+    allowed_domains = ["supabase.co", "supabase.in", "localhost", "marketinsightsai"]
+    is_allowed = any(domain in url for domain in allowed_domains)
+    if not is_allowed:
+        raise HTTPException(status_code=400, detail="URL domain not allowed")
+
+    try:
+        # Fetch HTML content from URL
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Failed to fetch HTML: {response.status_code}"
+                )
+            html_content = response.text
+
+        return Response(
+            content=html_content,
+            media_type="text/html",
+            headers={
+                "Content-Type": "text/html; charset=utf-8",
+                "X-Frame-Options": "SAMEORIGIN"
+            }
+        )
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout fetching HTML content")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error proxying HTML: {str(e)}")
+
+
+@router.get("/convert-to-pdf")
+async def convert_url_to_pdf(url: str = Query(..., description="URL of HTML to convert to PDF")):
+    """Convert an HTML page from a URL to PDF.
+
+    This endpoint fetches HTML content from a given URL (e.g., Supabase Storage)
+    and converts it to PDF using WeasyPrint.
+
+    Args:
+        url: The URL of the HTML page to convert
+
+    Returns:
+        PDF file as attachment
+    """
+    # Validate URL - only allow Supabase and our own domain
+    allowed_domains = ["supabase.co", "supabase.in", "localhost", "marketinsightsai"]
+    is_allowed = any(domain in url for domain in allowed_domains)
+    if not is_allowed:
+        raise HTTPException(status_code=400, detail="URL domain not allowed")
+
+    try:
+        # Fetch HTML content from URL
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Failed to fetch HTML: {response.status_code}"
+                )
+            html_content = response.text
+
+        # Write to temp file for PDF generation
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html_content)
+            temp_path = f.name
+
+        try:
+            # Generate PDF
+            pdf_content = generate_pdf_from_html(temp_path)
+
+            if pdf_content:
+                # Extract filename from URL
+                filename = url.split('/')[-1].split('?')[0]
+                pdf_filename = filename.replace('.html', '.pdf')
+
+                return Response(
+                    content=pdf_content,
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{pdf_filename}"'}
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail="PDF generation failed - WeasyPrint may not be available"
+                )
+        finally:
+            # Clean up temp file
+            os.unlink(temp_path)
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout fetching HTML content")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error converting to PDF: {str(e)}")

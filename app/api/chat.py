@@ -863,6 +863,9 @@ async def chat_stream(request: ChatRequest):
 
     Returns a text/event-stream response with chunks of the AI response.
     The final chunk contains sources as JSON with __SOURCES__ prefix.
+
+    Note: Newlines in content are escaped as \\n to preserve SSE format,
+    and must be decoded by the client.
     """
     async def generate():
         try:
@@ -870,8 +873,10 @@ async def chat_stream(request: ChatRequest):
                 message=request.message,
                 use_knowledge_base=request.use_knowledge_base
             ):
-                # Send each chunk as a Server-Sent Event
-                yield f"data: {chunk}\n\n"
+                # Escape newlines in content to preserve them through SSE
+                # The frontend will decode these back to actual newlines
+                escaped_chunk = chunk.replace('\n', '\\n')
+                yield f"data: {escaped_chunk}\n\n"
         except Exception as e:
             yield f"data: Error: {str(e)}\n\n"
         finally:

@@ -11,10 +11,10 @@
             {# Business Insights below chart (task 4) #}
             {% include "reports/tapestry/components/insights.html" %}
 
-            {# Divider and heading before segments section #}
-            <div class="section-divider"></div>
-            <div class="segment-details-heading">Segment Details</div>
-            <div class="section-divider"></div>
+            {# Separator with centered text before segments #}
+            <div class="section-separator">
+                <span class="section-separator-text">SEGMENT DETAILS</span>
+            </div>
 
             {# First segment card (not compact) #}
             {% if segments|length > 0 %}

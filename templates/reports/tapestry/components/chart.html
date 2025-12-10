@@ -2,12 +2,19 @@
 <div class="chart-section">
     <div class="chart-container">
         {% for segment in segments %}
+        {% set bar_width = (segment.household_share / max_share * 100)|round(1) %}
+        {% set is_small_bar = bar_width < 35 %}
         <div class="chart-row">
             <div class="chart-label">{{ segment.code }}: {{ segment.name }}</div>
             <div class="chart-bar-container">
-                <div class="chart-bar" style="width: {{ (segment.household_share / max_share * 100)|round(1) }}%; background-color: {{ segment_colors.get(segment.code[0], '#64748B') }};">
+                <div class="chart-bar {% if is_small_bar %}chart-bar-small{% endif %}" style="width: {{ bar_width }}%; background-color: {{ segment_colors.get(segment.code[0], '#64748B') }};">
+                    {% if not is_small_bar %}
                     <span class="chart-bar-text">{{ segment.household_share|round(0)|int }}% ({{ "{:,}".format(segment.household_count) }} HHs)</span>
+                    {% endif %}
                 </div>
+                {% if is_small_bar %}
+                <span class="chart-bar-text-outside" style="color: {{ segment_colors.get(segment.code[0], '#64748B') }};">{{ segment.household_share|round(0)|int }}% ({{ "{:,}".format(segment.household_count) }} HHs)</span>
+                {% endif %}
             </div>
         </div>
         {% endfor %}

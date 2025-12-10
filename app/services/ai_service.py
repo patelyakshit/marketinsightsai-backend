@@ -540,7 +540,22 @@ When users upload tapestry files:
 - Highlight interesting insights (top segments, notable demographics)
 - Suggest what they might want to do next (generate a report, compare stores, etc.)
 
-Keep responses conversational and helpful. Use markdown formatting for readability when appropriate."""
+CRITICAL FORMATTING RULES - You MUST follow these:
+1. Always put a BLANK LINE between paragraphs
+2. For bullet lists, start with a blank line, then each item on its own line:
+
+- First item
+- Second item
+- Third item
+
+3. For numbered lists, start with a blank line, then each item on its own line:
+
+1. First point
+2. Second point
+3. Third point
+
+4. Use **bold** for key terms and emphasis
+5. Keep responses scannable with clear visual separation"""
 
     if context:
         system_prompt += f"\n\nHere is relevant context:\n\n{context}"
@@ -562,7 +577,10 @@ Keep responses conversational and helpful. Use markdown formatting for readabili
         temperature=0.7,
     )
 
-    return response.choices[0].message.content or "", sources
+    result = response.choices[0].message.content or ""
+    # Debug: Log the response to check for newlines
+    logger.info(f"AI Response (first 500 chars): {repr(result[:500])}")
+    return result, sources
 
 
 from typing import AsyncGenerator
@@ -627,7 +645,22 @@ When users upload tapestry files:
 - Highlight interesting insights (top segments, notable demographics)
 - Suggest what they might want to do next (generate a report, compare stores, etc.)
 
-Keep responses conversational and helpful. Use markdown formatting for readability when appropriate."""
+CRITICAL FORMATTING RULES - You MUST follow these:
+1. Always put a BLANK LINE between paragraphs
+2. For bullet lists, start with a blank line, then each item on its own line:
+
+- First item
+- Second item
+- Third item
+
+3. For numbered lists, start with a blank line, then each item on its own line:
+
+1. First point
+2. Second point
+3. Third point
+
+4. Use **bold** for key terms and emphasis
+5. Keep responses scannable with clear visual separation"""
 
     if context:
         system_prompt += f"\n\nHere is relevant context:\n\n{context}"

@@ -211,6 +211,8 @@
             border-radius: 2px;
             overflow: visible;
             position: relative;
+            display: flex;
+            align-items: center;
         }
 
         .chart-bar {
@@ -228,6 +230,19 @@
             font-weight: 600;
             color: white;
             white-space: nowrap;
+        }
+
+        .chart-bar-text-outside {
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .chart-bar-small {
+            min-width: 0;
+            flex-shrink: 0;
         }
 
         /* Segment Card - New Design */
@@ -485,6 +500,30 @@
             margin: 16px 0;
         }
 
+        /* Section Separator with centered text */
+        .section-separator {
+            display: flex;
+            align-items: center;
+            margin: 16px 0;
+        }
+
+        .section-separator::before,
+        .section-separator::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-dark);
+        }
+
+        .section-separator-text {
+            padding: 0 16px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-light);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
         /* Segment Divider - between segments on pages 2 and 3 */
         .segment-divider {
             height: 1px;
@@ -566,6 +605,11 @@
             font-size: 10px;
             color: var(--text-medium);
             line-height: 1.6;
+        }
+
+        /* Larger font for main insights section */
+        .insights-section-main .insights-box p {
+            font-size: 12px;
         }
 
         /* Footer */

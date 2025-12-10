@@ -89,6 +89,19 @@ def markdown_to_html(text: str) -> Markup:
     return Markup(text)
 
 
+def sanitize_filename(text: str) -> str:
+    """Sanitize text for use in filenames.
+
+    Removes or replaces characters that are not safe for filenames.
+    """
+    if not text:
+        return "unknown"
+    # Replace spaces with underscores, remove unsafe characters
+    text = re.sub(r'[<>:"/\\|?*]', '', text)
+    text = re.sub(r'\s+', '_', text.strip())
+    return text[:50]  # Limit length
+
+
 def _get_jinja_env() -> Environment:
     """Create and configure Jinja2 environment."""
     env = Environment(
@@ -295,7 +308,8 @@ async def generate_tapestry_report(store: Store, goal: str | None = None) -> str
     )[:5]
 
     # Generate business insights with enriched segment data
-    segment_data = [s.model_dump() for s in top_segments]
+    # Use by_alias=False to get snake_case keys (household_share, not householdShare)
+    segment_data = [s.model_dump(by_alias=False) for s in top_segments]
     insights, insights_title = await generate_business_insights(
         store_name=store.name,
         segments=segment_data,
@@ -342,8 +356,10 @@ async def generate_tapestry_report(store: Store, goal: str | None = None) -> str
         total_pages=3,
     )
 
-    # Generate unique filename
-    report_filename = f"report_{store.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+    # Generate unique filename: [store_number] - [store_name] - Lifestyle report by Locaition Matters
+    store_num = store.store_number or "unknown"
+    store_name_safe = sanitize_filename(store.name)
+    report_filename = f"{store_num}_{store_name_safe}_Lifestyle_report_by_Locaition_Matters.html"
 
     # Upload to cloud storage (or save locally as fallback)
     report_url = await upload_report(html_content, report_filename)
@@ -394,7 +410,8 @@ async def generate_multi_store_report(
         )[:5]
 
         # Generate business insights with enriched segment data
-        segment_data = [s.model_dump() for s in top_segments]
+        # Use by_alias=False to get snake_case keys (household_share, not householdShare)
+        segment_data = [s.model_dump(by_alias=False) for s in top_segments]
         insights, insights_title = await generate_business_insights(
             store_name=store.name,
             segments=segment_data,
@@ -454,12 +471,14 @@ async def generate_multi_store_report(
         total_pages=total_pages,
     )
 
-    # Generate unique filename
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    # Generate unique filename: [store_number] - [store_name] - Lifestyle report by Locaition Matters
     if len(stores) == 1:
-        report_filename = f"report_{stores[0].id}_{timestamp}.html"
+        store = stores[0]
+        store_num = store.store_number or "unknown"
+        store_name_safe = sanitize_filename(store.name)
+        report_filename = f"{store_num}_-_{store_name_safe}_-_Lifestyle_report_by_Locaition_Matters.html"
     else:
-        report_filename = f"report_multi_{len(stores)}stores_{timestamp}.html"
+        report_filename = f"Multi_Store_{len(stores)}_stores_-_Lifestyle_report_by_Locaition_Matters.html"
 
     # Upload to cloud storage (or save locally as fallback)
     report_url = await upload_report(html_content, report_filename)

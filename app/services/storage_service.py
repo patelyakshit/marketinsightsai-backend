@@ -45,6 +45,13 @@ def is_storage_enabled() -> bool:
     return get_supabase_client() is not None
 
 
+def _get_full_url(relative_path: str) -> str:
+    """Get full URL for a relative path, using backend_url if configured."""
+    if settings.backend_url:
+        return f"{settings.backend_url.rstrip('/')}{relative_path}"
+    return relative_path
+
+
 async def upload_file(
     file_content: bytes,
     file_path: str,
@@ -137,8 +144,8 @@ def get_public_url(
     bucket_name = bucket or settings.supabase_storage_bucket
 
     if client is None:
-        # Return local API endpoint
-        return f"/api/reports/files/{file_path}"
+        # Return local API endpoint with full URL if backend_url configured
+        return _get_full_url(f"/api/reports/files/{file_path}")
 
     return client.storage.from_(bucket_name).get_public_url(file_path)
 
@@ -187,7 +194,12 @@ async def _save_local(file_content: bytes, file_path: str) -> str:
         f.write(file_content)
 
     logger.info(f"File saved locally: {local_path}")
-    return f"/api/reports/files/{filename}"
+
+    # Return full URL if backend_url is configured, otherwise relative path
+    relative_path = f"/api/reports/files/{filename}"
+    if settings.backend_url:
+        return f"{settings.backend_url.rstrip('/')}{relative_path}"
+    return relative_path
 
 
 async def _read_local(file_path: str) -> Optional[bytes]:
@@ -235,7 +247,7 @@ async def upload_report(
         file_path=file_path,
         content_type="text/html"
     )
-    return url or f"/api/reports/files/{filename}"
+    return url or _get_full_url(f"/api/reports/files/{filename}")
 
 
 async def upload_image(
@@ -260,7 +272,7 @@ async def upload_image(
         file_path=file_path,
         content_type=content_type
     )
-    return url or f"/api/reports/generated_images/{filename}"
+    return url or _get_full_url(f"/api/reports/generated_images/{filename}")
 
 
 async def upload_pdf(
@@ -283,4 +295,4 @@ async def upload_pdf(
         file_path=file_path,
         content_type="application/pdf"
     )
-    return url or f"/api/reports/files/{filename}"
+    return url or _get_full_url(f"/api/reports/files/{filename}")

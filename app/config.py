@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""  # Service role key for server-side operations
     supabase_storage_bucket: str = "reports"  # Default bucket name
 
+    # Backend URL (for generating full URLs when Supabase not configured)
+    backend_url: str = ""  # e.g., https://marketinsightsai-backend-production.up.railway.app
+
     # JWT Authentication
     jwt_secret: str = "your-super-secret-key-change-in-production"
     jwt_algorithm: str = "HS256"

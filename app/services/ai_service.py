@@ -657,6 +657,160 @@ Keep responses conversational and helpful. Use markdown formatting for readabili
     yield f"\n\n__SOURCES__:{json.dumps(sources)}"
 
 
+# =============================================================================
+# AI-DRIVEN INTENT DETECTION (Manus-style)
+# =============================================================================
+
+async def detect_user_intent(
+    message: str,
+    available_stores: dict[str, Store] | None = None,
+    conversation_history: list[dict] | None = None
+) -> dict:
+    """
+    Use AI to understand user intent naturally, including typos and variations.
+
+    Returns a dict with:
+    - intent: 'generate_report' | 'generate_marketing' | 'navigate_map' | 'general_chat' | 'clarification_needed'
+    - store_name: The store name user is referring to (if detected)
+    - store_id: Matched store ID (if found in available_stores)
+    - platform: Social media platform for marketing (if applicable)
+    - clarification_question: Question to ask user (if intent unclear)
+    - confidence: float 0-1
+    """
+    if not client:
+        return {"intent": "general_chat", "confidence": 0.5}
+
+    # Build context about available stores
+    store_context = ""
+    if available_stores:
+        store_list = []
+        for sid, store in available_stores.items():
+            store_info = f"- {store.name}"
+            if store.store_number:
+                store_info += f" (Store #{store.store_number})"
+            store_list.append(store_info)
+        store_context = f"""
+The user has {len(available_stores)} stores loaded with tapestry data:
+{chr(10).join(store_list[:20])}
+{"... and " + str(len(available_stores) - 20) + " more stores" if len(available_stores) > 20 else ""}
+"""
+    else:
+        store_context = "The user has not uploaded any store data yet."
+
+    # Define the function for intent detection
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "detect_intent",
+                "description": "Analyze user message and determine their intent",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "intent": {
+                            "type": "string",
+                            "enum": ["generate_report", "generate_marketing", "navigate_map", "general_chat", "clarification_needed"],
+                            "description": "The user's primary intent. Use 'clarification_needed' if you can't determine what they want."
+                        },
+                        "store_name": {
+                            "type": "string",
+                            "description": "The store name the user is referring to. Match to closest available store name even with typos."
+                        },
+                        "platform": {
+                            "type": "string",
+                            "enum": ["instagram", "linkedin", "facebook", "twitter", "any"],
+                            "description": "Social media platform for marketing posts. Use 'any' if not specified."
+                        },
+                        "location": {
+                            "type": "string",
+                            "description": "Location for map navigation if applicable."
+                        },
+                        "clarification_question": {
+                            "type": "string",
+                            "description": "A friendly question to ask the user if their intent is unclear or you need more information."
+                        },
+                        "confidence": {
+                            "type": "number",
+                            "description": "Your confidence in this interpretation (0-1)."
+                        }
+                    },
+                    "required": ["intent", "confidence"]
+                }
+            }
+        }
+    ]
+
+    system_prompt = f"""You are an AI assistant that helps understand user requests for a location intelligence platform.
+
+{store_context}
+
+Your job is to understand what the user wants, even if they:
+- Make typos (e.g., "marketing pot" means "marketing post")
+- Use informal language
+- Reference stores by partial name or number
+- Don't specify all details
+
+For store names:
+- Match to the closest available store name
+- Handle typos and partial matches
+- If user says "store 108" or "#108", match to a store with that number
+
+If you're unsure what the user wants, set intent to "clarification_needed" and provide a friendly clarification_question.
+
+Be smart about context - if stores are loaded and user asks for a "post" or "report", they probably want it for one of those stores."""
+
+    try:
+        response = await client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": message}
+            ],
+            tools=tools,
+            tool_choice={"type": "function", "function": {"name": "detect_intent"}},
+            temperature=0.1,  # Low temperature for consistent intent detection
+        )
+
+        # Parse the function call result
+        if response.choices[0].message.tool_calls:
+            import json
+            tool_call = response.choices[0].message.tool_calls[0]
+            result = json.loads(tool_call.function.arguments)
+
+            # Try to match store_name to actual store_id
+            if result.get("store_name") and available_stores:
+                store_name_lower = result["store_name"].lower()
+                best_match_id = None
+                best_match_score = 0
+
+                for sid, store in available_stores.items():
+                    # Check exact match first
+                    if store.name.lower() == store_name_lower:
+                        best_match_id = sid
+                        break
+
+                    # Check store number
+                    if store.store_number and store.store_number.lower() in store_name_lower:
+                        best_match_id = sid
+                        break
+
+                    # Fuzzy match
+                    score = SequenceMatcher(None, store.name.lower(), store_name_lower).ratio()
+                    if score > best_match_score and score > 0.6:
+                        best_match_score = score
+                        best_match_id = sid
+
+                result["store_id"] = best_match_id
+
+            return result
+
+        return {"intent": "general_chat", "confidence": 0.5}
+
+    except Exception as e:
+        logger.error(f"Intent detection error: {e}")
+        return {"intent": "general_chat", "confidence": 0.5}
+
+
 async def generate_image(prompt: str) -> tuple[str, str]:
     """Generate an image using Google Gemini/Imagen API."""
     if not gemini_client:

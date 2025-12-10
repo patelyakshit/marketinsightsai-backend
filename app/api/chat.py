@@ -19,7 +19,7 @@ from app.services.ai_service import (
     get_chat_response, get_chat_response_streaming, generate_image,
     detect_map_command, handle_map_command, handle_disambiguation_choice,
     detect_marketing_request, detect_approval_response, detect_report_request,
-    detect_business_goal,
+    detect_business_goal, detect_user_intent,
     generate_marketing_recommendation, build_marketing_response_text,
     generate_marketing_image
 )
@@ -441,6 +441,114 @@ Respond naturally about what you found. Mention key insights from the data and s
                 sources=sources,
                 stores=stores,
             )
+
+        # =======================================================================
+        # AI-DRIVEN INTENT DETECTION (Manus-style)
+        # Let the AI understand what the user wants, including typos and variations
+        # =======================================================================
+        if not action:  # Only use AI intent if no explicit action from frontend
+            user_intent = await detect_user_intent(message, _chat_stores)
+            logger.info(f"AI detected intent: {user_intent}")
+
+            # If AI needs clarification, ask the user
+            if user_intent.get("intent") == "clarification_needed":
+                clarification_q = user_intent.get("clarification_question", "Could you please clarify what you'd like me to do?")
+                return AIChatResponse(
+                    response=clarification_q,
+                    sources=[],
+                    stores=list(_chat_stores.values()) if _chat_stores else [],
+                )
+
+            # Handle marketing intent from AI
+            if user_intent.get("intent") == "generate_marketing":
+                store_id_from_ai = user_intent.get("store_id")
+                platform_from_ai = user_intent.get("platform", "any")
+
+                # Find the store
+                store = None
+                if store_id_from_ai:
+                    store = _chat_stores.get(store_id_from_ai)
+                elif len(_chat_stores) == 1:
+                    store = list(_chat_stores.values())[0]
+
+                if store:
+                    # Convert platform string to enum
+                    platform_enum = None
+                    if platform_from_ai and platform_from_ai != "any":
+                        try:
+                            platform_enum = MarketingPlatform(platform_from_ai)
+                        except ValueError:
+                            pass
+
+                    # Generate marketing recommendation
+                    recommendation = await generate_marketing_recommendation(store, platform_enum)
+                    _pending_marketing["latest"] = recommendation
+                    response_text = build_marketing_response_text(recommendation)
+
+                    return AIChatResponse(
+                        response=response_text,
+                        sources=["Esri Tapestry Segmentation"],
+                        stores=list(_chat_stores.values()) if _chat_stores else [],
+                        marketing_action=MarketingAction(
+                            type=MarketingActionType.recommendation,
+                            recommendation=recommendation,
+                        ),
+                    )
+                elif _chat_stores:
+                    # AI detected marketing intent but couldn't match store
+                    store_names = [s.name for s in list(_chat_stores.values())[:5]]
+                    store_name_from_ai = user_intent.get("store_name", "")
+                    return AIChatResponse(
+                        response=f"I'd love to create a marketing post! I tried to find '{store_name_from_ai}' but couldn't match it to your stores. Here are your available stores: **{', '.join(store_names)}**{' and more...' if len(_chat_stores) > 5 else ''}. Which one would you like me to create a marketing post for?",
+                        sources=[],
+                        stores=list(_chat_stores.values()),
+                    )
+                else:
+                    return AIChatResponse(
+                        response="I'd love to create a marketing post, but I need store data first. Please upload a tapestry file with your store's customer segment information, and I'll help you create targeted marketing content!",
+                        sources=[],
+                        stores=[],
+                    )
+
+            # Handle report intent from AI
+            if user_intent.get("intent") == "generate_report":
+                store_id_from_ai = user_intent.get("store_id")
+
+                if store_id_from_ai and store_id_from_ai in _chat_stores:
+                    store = _chat_stores[store_id_from_ai]
+                    report_url = await generate_tapestry_report(store, goal="generic")
+                    return AIChatResponse(
+                        response=f"I've generated the tapestry report for {store.name}. You can view it in the preview panel or download it.",
+                        sources=["Esri Tapestry Segmentation"],
+                        stores=list(_chat_stores.values()) if _chat_stores else [],
+                        report_url=report_url,
+                    )
+                elif _chat_stores:
+                    store_names = [s.name for s in list(_chat_stores.values())[:5]]
+                    store_name_from_ai = user_intent.get("store_name", "")
+                    return AIChatResponse(
+                        response=f"I'd love to generate a report! I tried to find '{store_name_from_ai}' but couldn't match it exactly. Here are your available stores: **{', '.join(store_names)}**{' and more...' if len(_chat_stores) > 5 else ''}. Which one would you like a report for?",
+                        sources=[],
+                        stores=list(_chat_stores.values()),
+                    )
+
+            # Handle map navigation from AI
+            if user_intent.get("intent") == "navigate_map":
+                location = user_intent.get("location")
+                if location:
+                    response_msg, map_action = await handle_map_command(location)
+                    if map_action and map_action.type.value == "disambiguate":
+                        _pending_disambiguation["latest"] = map_action.options
+                    return AIChatResponse(
+                        response=response_msg,
+                        sources=[],
+                        stores=list(_chat_stores.values()) if _chat_stores else [],
+                        map_action=map_action,
+                    )
+
+        # =======================================================================
+        # FALLBACK: Legacy regex-based detection (for backward compatibility)
+        # =======================================================================
 
         # Handle report generation (from action parameter or natural language)
         report_store_ids = store_id  # Can be single ID or list

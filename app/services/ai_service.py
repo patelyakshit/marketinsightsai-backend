@@ -658,46 +658,67 @@ Keep responses conversational and helpful. Use markdown formatting for readabili
 
 
 async def generate_image(prompt: str) -> tuple[str, str]:
-    """Generate an image using Google Gemini native image generation."""
+    """Generate an image using Google Gemini/Imagen API."""
     if not gemini_client:
         return (
             "https://placehold.co/512x512/3b82f6/ffffff?text=Image+Generation",
             f"Image generation for: {prompt}. Configure Google API key for actual image generation."
         )
 
+    model_name = settings.gemini_image_model
+    logger.info(f"Generating image with model: {model_name}")
+
     try:
-        # Use Gemini native image generation with generate_content API
-        # This works with models like gemini-2.0-flash-exp-image-generation, gemini-2.5-flash-image
-        response = gemini_client.models.generate_content(
-            model=settings.gemini_image_model,
-            contents=[prompt],
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE", "TEXT"],
-            ),
-        )
+        # Check if using Imagen model (generate_images API) or Gemini model (generate_content API)
+        if model_name.startswith("imagen"):
+            # Use generate_images() for Imagen models
+            response = gemini_client.models.generate_images(
+                model=model_name,
+                prompt=prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1,
+                    aspect_ratio="1:1",
+                    safety_filter_level="BLOCK_MEDIUM_AND_ABOVE",
+                ),
+            )
 
-        # Check if we got an image in the response
-        if response.candidates and len(response.candidates) > 0:
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'inline_data') and part.inline_data:
-                    # Get the image data
-                    image_data = part.inline_data.data
-                    if isinstance(image_data, str):
-                        image_data = base64.b64decode(image_data)
+            if response.generated_images and len(response.generated_images) > 0:
+                image_data = response.generated_images[0].image.image_bytes
+                image_id = str(uuid.uuid4())
+                image_filename = f"{image_id}.png"
+                image_url = await upload_image(image_data, image_filename)
 
-                    # Generate unique filename
-                    image_id = str(uuid.uuid4())
-                    image_filename = f"{image_id}.png"
+                image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
+                with open(image_path, "wb") as f:
+                    f.write(image_data)
 
-                    # Upload to cloud storage (or save locally as fallback)
-                    image_url = await upload_image(image_data, image_filename)
+                return (image_url, f"Generated image for: {prompt[:100]}...")
+        else:
+            # Use generate_content() for Gemini models with image generation
+            response = gemini_client.models.generate_content(
+                model=model_name,
+                contents=[prompt],
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE", "TEXT"],
+                ),
+            )
 
-                    # Also save locally for fallback/caching
-                    image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
-                    with open(image_path, "wb") as f:
-                        f.write(image_data)
+            if response.candidates and len(response.candidates) > 0:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        image_data = part.inline_data.data
+                        if isinstance(image_data, str):
+                            image_data = base64.b64decode(image_data)
 
-                    return (image_url, f"Generated image for: {prompt[:100]}...")
+                        image_id = str(uuid.uuid4())
+                        image_filename = f"{image_id}.png"
+                        image_url = await upload_image(image_data, image_filename)
+
+                        image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
+                        with open(image_path, "wb") as f:
+                            f.write(image_data)
+
+                        return (image_url, f"Generated image for: {prompt[:100]}...")
 
         return (
             "https://placehold.co/512x512/ef4444/ffffff?text=Generation+Failed",
@@ -705,7 +726,7 @@ async def generate_image(prompt: str) -> tuple[str, str]:
         )
 
     except Exception as e:
-        logger.error(f"Image generation error: {e}")
+        logger.error(f"Image generation error with model {model_name}: {e}")
         return (
             "https://placehold.co/512x512/ef4444/ffffff?text=Error",
             f"Image generation failed: {str(e)}"

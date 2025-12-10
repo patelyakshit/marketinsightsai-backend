@@ -1126,14 +1126,35 @@ def detect_business_type(store_name: str) -> tuple[str, str]:
 
     Returns:
         Tuple of (business_type, business_context)
-        - business_type: Short identifier like "pet store", "restaurant", etc.
+        - business_type: Short identifier like "dog store", "restaurant", etc.
         - business_context: Detailed context for the AI prompt
     """
     name_lower = store_name.lower()
 
-    # Pet/Animal stores
-    pet_keywords = ['pet', 'dog', 'cat', 'animal', 'paw', 'bark', 'woof', 'meow', 'puppy',
-                   'kitten', 'pooch', 'canine', 'feline', 'grooming', 'veterinary', 'vet']
+    # Dog-specific stores (check first before general pet)
+    dog_keywords = ['dog', 'pup', 'puppy', 'canine', 'bark', 'woof', 'pooch', 'hound', 'k9', 'k-9']
+    if any(kw in name_lower for kw in dog_keywords):
+        return "dog store", """This is a DOG STORE / DOG SERVICES business.
+All recommendations MUST be specific to the DOG industry:
+- Products: dog food, dog treats, dog toys, leashes, collars, dog beds, dog apparel, dental chews
+- Services: dog grooming, dog boarding, dog training, dog daycare, dog walking
+- Marketing: dog owner community, breed-specific content, dog health tips, dog training advice
+- Promotions: puppy starter kits, dog adoption events, loyalty programs for dog parents, seasonal dog products
+- Target audience: DOG OWNERS and DOG PARENTS
+- DO NOT mention cats, generic pets, or non-dog animals - this is DOG-SPECIFIC"""
+
+    # Cat-specific stores
+    cat_keywords = ['cat', 'kitten', 'feline', 'meow', 'kitty', 'whisker']
+    if any(kw in name_lower for kw in cat_keywords):
+        return "cat store", """This is a CAT STORE / CAT SERVICES business.
+All recommendations MUST be specific to the CAT industry:
+- Products: cat food, cat treats, cat toys, scratching posts, litter, cat beds
+- Services: cat grooming, cat boarding, cat sitting
+- Marketing: cat owner community, cat health tips
+- DO NOT mention dogs or generic pets - this is CAT-SPECIFIC"""
+
+    # General pet stores (if not dog or cat specific)
+    pet_keywords = ['pet', 'animal', 'paw', 'critter', 'grooming', 'veterinary', 'vet']
     if any(kw in name_lower for kw in pet_keywords):
         return "pet store", """This is a PET STORE / PET SERVICES business.
 All recommendations MUST be specific to the pet industry:

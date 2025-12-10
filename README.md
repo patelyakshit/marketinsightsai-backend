@@ -179,14 +179,13 @@ See [full API documentation](./docs/api/README.md).
 
 ## Deployment
 
-### Render (Recommended)
+### Railway (Recommended)
 
-1. Connect GitHub repo to Render
+1. Connect GitHub repo to Railway
 2. Configure as Web Service:
-   - Environment: Python 3
-   - Build Command: `pip install -r requirements.txt`
+   - Uses `Dockerfile` or auto-detected Python
    - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-3. Add environment variables
+3. Add environment variables in Railway dashboard
 
 ### Docker
 

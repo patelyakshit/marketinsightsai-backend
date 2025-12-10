@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Google Gemini (for image generation)
     google_api_key: str = ""
-    gemini_image_model: str = "imagen-3.0-generate-002"  # Imagen 3 for high-quality images
+    gemini_image_model: str = "imagen-3.0-generate-002"  # Imagen 3 for generate_images() API
 
     # Google OAuth
     google_client_id: str = ""

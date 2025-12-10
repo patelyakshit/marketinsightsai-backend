@@ -28,7 +28,7 @@ This is the backend API for **MarketInsightsAI** - an autonomous AI agent platfo
 
 ### Deployment
 
-- **Backend**: Render (https://marketinsightsai-api.onrender.com)
+- **Backend**: Railway (https://marketinsightsai-backend-production.up.railway.app)
 - **Frontend**: Vercel (https://marketinsightsai.vercel.app)
 
 ---

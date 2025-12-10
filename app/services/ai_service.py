@@ -1016,9 +1016,12 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
 
     # Generate image using Gemini native image generation
     image_url = None
+    logger.info(f"Starting marketing image generation with model: {settings.gemini_image_model}")
+
     if gemini_client:
         try:
-            # Use model from settings (e.g., gemini-2.0-flash-exp-image-generation)
+            # Use model from settings (e.g., gemini-3-pro-image-preview)
+            logger.info(f"Calling Gemini generate_content with model: {settings.gemini_image_model}")
             response = gemini_client.models.generate_content(
                 model=settings.gemini_image_model,
                 contents=[image_prompt],
@@ -1026,12 +1029,15 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
                     response_modalities=["IMAGE", "TEXT"],
                 ),
             )
+            logger.info(f"Gemini response received, checking for image...")
 
             # Check if we got an image in the response
             image_saved = False
             if response.candidates and len(response.candidates) > 0:
+                logger.info(f"Got {len(response.candidates)} candidates, checking parts...")
                 for part in response.candidates[0].content.parts:
                     if hasattr(part, 'inline_data') and part.inline_data:
+                        logger.info("Found inline_data with image")
                         # Get the image data
                         image_data = part.inline_data.data
                         if isinstance(image_data, str):
@@ -1042,7 +1048,9 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
                         image_filename = f"marketing_{image_id}.png"
 
                         # Upload to cloud storage (or save locally as fallback)
+                        logger.info(f"Uploading image: {image_filename}")
                         image_url = await upload_image(image_data, image_filename)
+                        logger.info(f"Image uploaded successfully: {image_url}")
 
                         # Also save locally for fallback/caching
                         image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
@@ -1051,13 +1059,18 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
 
                         image_saved = True
                         break
+                    elif hasattr(part, 'text') and part.text:
+                        logger.info(f"Got text part: {part.text[:200]}...")
+            else:
+                logger.warning("No candidates in Gemini response")
 
             if not image_saved:
-                # Fallback: Try Imagen 4 if available
+                logger.warning("No image found in Gemini response, trying Imagen 3 fallback...")
+                # Fallback: Try Imagen 3 if available
                 try:
                     imagen_response = gemini_client.models.generate_images(
-                        model="imagen-4.0-generate-001",
-                        prompt=image_prompt,
+                        model="imagen-3.0-generate-002",
+                        prompt=image_prompt[:1000],  # Imagen has shorter prompt limit
                         config=types.GenerateImagesConfig(
                             number_of_images=1,
                             aspect_ratio=spec["aspect_ratio"],
@@ -1065,6 +1078,7 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
                     )
 
                     if imagen_response.generated_images and len(imagen_response.generated_images) > 0:
+                        logger.info("Imagen 3 fallback successful")
                         image_data = imagen_response.generated_images[0].image.image_bytes
 
                         image_id = str(uuid.uuid4())
@@ -1078,13 +1092,16 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
                         with open(image_path, "wb") as f:
                             f.write(image_data)
                 except Exception as imagen_error:
-                    logger.warning(f"Imagen 4 fallback failed: {imagen_error}")
+                    logger.warning(f"Imagen 3 fallback failed: {imagen_error}")
                     image_url = "https://placehold.co/1080x1080/3b82f6/ffffff?text=Image+Generation+Unavailable"
 
         except Exception as e:
-            logger.error(f"Marketing image generation error: {e}")
+            logger.error(f"Marketing image generation error: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             image_url = "https://placehold.co/1080x1080/3b82f6/ffffff?text=Image+Generation+Error"
     else:
+        logger.warning("Gemini client not configured - GOOGLE_API_KEY missing")
         image_url = "https://placehold.co/1080x1080/3b82f6/ffffff?text=Configure+Google+API+Key"
 
     # Create MarketingPost

@@ -1635,18 +1635,36 @@ def detect_approval_response(message: str) -> tuple[bool, MarketingPlatform | No
         if any(re.search(p, message_lower) for p in patterns):
             return True, platform
 
-    # Approval patterns (without platform)
+    # Approval patterns (without platform) - expanded to catch more variations and typos
     approval_patterns = [
-        r"^create\s*it\s*$",  # Exact "create it"
-        r"^make\s*it\s*$",  # Exact "make it"
-        r"^generate\s*it\s*$",  # Exact "generate it"
-        r"^do\s*it\s*$",  # Exact "do it"
-        r"(?:create|generate|make)\s+(?:it|the\s+image|the\s+post|this)",
-        r"^(?:yes|yep|yeah|sure|ok|okay|absolutely|definitely)\s*[!.]?$",
-        r"(?:looks?\s+)?(?:good|great|perfect|awesome|excellent)",
-        r"^go\s*(?:ahead|for\s*it)\s*$",
-        r"^approved?\s*$",
-        r"(?:let'?s?\s+)?(?:create|generate|make|do)\s+(?:it|this|that)",
+        # Direct commands (with common typos like "creatte", "craete", "crate")
+        r"cre+a+t+e?\s*it",  # Handles "create", "creatte", "creeate", etc.
+        r"cra+e?te?\s*it",   # Handles "crate it", "craete it"
+        r"make\s*it",
+        r"gen+e+ra+te?\s*it",  # Handles "generate", "gennerate", etc.
+        r"do\s*it",
+        r"build\s*it",
+        # With "the" article (with typo tolerance)
+        r"cre+a+t+e?\s+the\s+(?:image|post|creative|ad)",
+        r"gen+e+ra+te?\s+the\s+(?:image|post|creative|ad)",
+        r"make\s+the\s+(?:image|post|creative|ad)",
+        # Simple affirmatives
+        r"^(?:yes|yep|yeah|yup|sure|ok|okay|k|y)\s*[!.,]?$",
+        r"^(?:yes|yep|yeah|sure|ok|okay),?\s+(?:please|cre+a+t+e?|make|gen+e+ra+te?|do)",
+        r"^(?:absolutely|definitely|perfect|great|good|awesome|sounds good)",
+        # Go ahead variations
+        r"go\s*(?:ahead|for\s*it)",
+        r"let'?s?\s*(?:go|do\s*it|cre+a+t+e?|make|gen+e+ra+te?)",
+        # Approval words
+        r"^approved?\s*[!.]?$",
+        r"^(?:looks?\s+)?(?:good|great|perfect|awesome|excellent)",
+        # "That works", "I like it", etc.
+        r"(?:that|this)\s+(?:works|looks\s+good|is\s+(?:good|great|perfect))",
+        r"i\s+(?:like|love)\s+(?:it|this|that)",
+        # "Please create/make/generate" (with typo tolerance)
+        r"please\s+(?:cre+a+t+e?|make|gen+e+ra+te?|do)",
+        # Just "create" or "generate" alone (with typo tolerance)
+        r"^(?:cre+a+t+e?|gen+e+ra+te?|make)\s*[!.]?$",
     ]
 
     is_approval = any(re.search(p, message_lower) for p in approval_patterns)

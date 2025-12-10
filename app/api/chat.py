@@ -443,6 +443,46 @@ Respond naturally about what you found. Mention key insights from the data and s
             )
 
         # =======================================================================
+        # PRIORITY 1: Check for pending marketing approval FIRST
+        # This must be checked BEFORE AI intent detection to handle "create it"
+        # =======================================================================
+        if "latest" in _pending_marketing:
+            is_approval, selected_platform = detect_approval_response(message)
+            logger.info(f"Pending marketing check - is_approval: {is_approval}, platform: {selected_platform}")
+
+            if is_approval:
+                recommendation = _pending_marketing["latest"]
+
+                # Use selected platform or default to first suggested
+                final_platform = selected_platform or recommendation.suggested_platforms[0]
+
+                # Get the store if available
+                store = _chat_stores.get(recommendation.store_id)
+
+                # Clear pending state
+                del _pending_marketing["latest"]
+
+                # Generate the marketing image
+                logger.info(f"Generating marketing image for {recommendation.store_name} on {final_platform.value}")
+                marketing_post = await generate_marketing_image(
+                    recommendation=recommendation,
+                    platform=final_platform,
+                    store=store,
+                )
+
+                return AIChatResponse(
+                    response=f"Your {final_platform.value.title()} marketing post for {recommendation.store_name} is ready! I've created a beautiful image based on your customer demographics. You can view it in the Studio panel, download it, or save it to your library.",
+                    sources=["Esri Tapestry Segmentation", "Gemini Imagen 3"],
+                    stores=list(_chat_stores.values()) if _chat_stores else [],
+                    marketing_action=MarketingAction(
+                        type=MarketingActionType.generate_image,
+                        recommendation=recommendation,
+                        platform=final_platform,
+                        post=marketing_post,
+                    ),
+                )
+
+        # =======================================================================
         # AI-DRIVEN INTENT DETECTION (Manus-style)
         # Let the AI understand what the user wants, including typos and variations
         # =======================================================================
@@ -739,40 +779,7 @@ Respond naturally about what you found. Mention key insights from the data and s
                 ),
             )
 
-        # Check for marketing approval/platform selection (follow-up to recommendation)
-        if "latest" in _pending_marketing:
-            is_approval, selected_platform = detect_approval_response(message)
-
-            if is_approval:
-                recommendation = _pending_marketing["latest"]
-
-                # Use selected platform or default to first suggested
-                final_platform = selected_platform or recommendation.suggested_platforms[0]
-
-                # Get the store if available
-                store = _chat_stores.get(recommendation.store_id)
-
-                # Clear pending state
-                del _pending_marketing["latest"]
-
-                # Generate the marketing image
-                marketing_post = await generate_marketing_image(
-                    recommendation=recommendation,
-                    platform=final_platform,
-                    store=store,
-                )
-
-                return AIChatResponse(
-                    response=f"Your {final_platform.value.title()} marketing post for {recommendation.store_name} is ready! I've created a beautiful image based on your customer demographics. You can view it in the Studio panel, download it, or save it to your library.",
-                    sources=["Esri Tapestry Segmentation", "Gemini Imagen 3"],
-                    stores=list(_chat_stores.values()) if _chat_stores else [],
-                    marketing_action=MarketingAction(
-                        type=MarketingActionType.generate_image,
-                        recommendation=recommendation,
-                        platform=final_platform,
-                        post=marketing_post,
-                    ),
-                )
+        # Note: Marketing approval check moved to PRIORITY 1 section above (before AI intent detection)
 
         # Check for map navigation commands
         is_map_cmd, location_query = detect_map_command(message)

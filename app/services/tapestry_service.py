@@ -23,6 +23,7 @@ from markupsafe import Markup
 from app.models.schemas import Store, TapestrySegment
 from app.services.ai_service import generate_business_insights, generate_segment_insight
 from app.services.esri_service import get_segment_profile
+from app.services.storage_service import upload_report, is_storage_enabled
 from app.config import get_settings
 
 # Optional PDF support - requires system libraries (pango, cairo)
@@ -341,15 +342,19 @@ async def generate_tapestry_report(store: Store, goal: str | None = None) -> str
         total_pages=3,
     )
 
-    # Save HTML for preview
+    # Generate unique filename
     report_filename = f"report_{store.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-    report_path = os.path.join(settings.reports_output_path, report_filename)
 
+    # Upload to cloud storage (or save locally as fallback)
+    report_url = await upload_report(html_content, report_filename)
+
+    # Also save locally for fallback/caching
+    os.makedirs(settings.reports_output_path, exist_ok=True)
+    report_path = os.path.join(settings.reports_output_path, report_filename)
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    # Return the URL path (HTML for preview)
-    return f"/api/reports/files/{report_filename}"
+    return report_url
 
 
 async def generate_multi_store_report(
@@ -449,20 +454,23 @@ async def generate_multi_store_report(
         total_pages=total_pages,
     )
 
-    # Save HTML for preview
+    # Generate unique filename
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     if len(stores) == 1:
         report_filename = f"report_{stores[0].id}_{timestamp}.html"
     else:
         report_filename = f"report_multi_{len(stores)}stores_{timestamp}.html"
 
-    report_path = os.path.join(settings.reports_output_path, report_filename)
+    # Upload to cloud storage (or save locally as fallback)
+    report_url = await upload_report(html_content, report_filename)
 
+    # Also save locally for fallback/caching
+    os.makedirs(settings.reports_output_path, exist_ok=True)
+    report_path = os.path.join(settings.reports_output_path, report_filename)
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    # Return the URL path (HTML for preview)
-    return f"/api/reports/files/{report_filename}"
+    return report_url
 
 
 def generate_pdf_from_html(html_path: str) -> bytes | None:

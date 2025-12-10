@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # Report settings
     reports_output_path: str = "./reports"
 
+    # Supabase Storage (for cloud file storage)
+    supabase_url: str = ""
+    supabase_service_key: str = ""  # Service role key for server-side operations
+    supabase_storage_bucket: str = "reports"  # Default bucket name
+
     # JWT Authentication
     jwt_secret: str = "your-super-secret-key-change-in-production"
     jwt_algorithm: str = "HS256"

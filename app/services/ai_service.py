@@ -25,6 +25,7 @@ from app.models.schemas import (
     MarketingRecommendation, MarketingPost, MarketingPlatform,
     MarketingAction, MarketingActionType, Store, TapestrySegment
 )
+from app.services.storage_service import upload_image
 
 settings = get_settings()
 client = AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
@@ -680,16 +681,18 @@ async def generate_image(prompt: str) -> tuple[str, str]:
             # Get the image data
             image_data = response.generated_images[0].image.image_bytes
 
-            # Save to file
+            # Generate unique filename
             image_id = str(uuid.uuid4())
             image_filename = f"{image_id}.png"
-            image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
 
+            # Upload to cloud storage (or save locally as fallback)
+            image_url = await upload_image(image_data, image_filename)
+
+            # Also save locally for fallback/caching
+            image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
             with open(image_path, "wb") as f:
                 f.write(image_data)
 
-            # Return URL path (will be served by static files)
-            image_url = f"/api/reports/generated_images/{image_filename}"
             return (image_url, f"Generated image for: {prompt[:100]}...")
 
         return (
@@ -823,15 +826,18 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
                         if isinstance(image_data, str):
                             image_data = base64.b64decode(image_data)
 
-                        # Save to file
+                        # Generate unique filename
                         image_id = str(uuid.uuid4())
                         image_filename = f"marketing_{image_id}.png"
-                        image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
 
+                        # Upload to cloud storage (or save locally as fallback)
+                        image_url = await upload_image(image_data, image_filename)
+
+                        # Also save locally for fallback/caching
+                        image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
                         with open(image_path, "wb") as f:
                             f.write(image_data)
 
-                        image_url = f"/api/reports/generated_images/{image_filename}"
                         image_saved = True
                         break
 
@@ -852,12 +858,14 @@ DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements""
 
                         image_id = str(uuid.uuid4())
                         image_filename = f"marketing_{image_id}.png"
-                        image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
 
+                        # Upload to cloud storage (or save locally as fallback)
+                        image_url = await upload_image(image_data, image_filename)
+
+                        # Also save locally for fallback/caching
+                        image_path = os.path.join(GENERATED_IMAGES_DIR, image_filename)
                         with open(image_path, "wb") as f:
                             f.write(image_data)
-
-                        image_url = f"/api/reports/generated_images/{image_filename}"
                 except Exception as imagen_error:
                     logger.warning(f"Imagen 4 fallback failed: {imagen_error}")
                     image_url = "https://placehold.co/1080x1080/3b82f6/ffffff?text=Image+Generation+Unavailable"

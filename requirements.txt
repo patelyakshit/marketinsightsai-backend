@@ -51,3 +51,6 @@ sentry-sdk[fastapi]>=2.19.0
 
 # Rate Limiting
 slowapi>=0.1.9
+
+# Cloud Storage
+supabase>=2.10.0

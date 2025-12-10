@@ -9,11 +9,11 @@
             <div class="chart-bar-container">
                 <div class="chart-bar {% if is_small_bar %}chart-bar-small{% endif %}" style="width: {{ bar_width }}%; background-color: {{ segment_colors.get(segment.code[0], '#64748B') }};">
                     {% if not is_small_bar %}
-                    <span class="chart-bar-text">{{ segment.household_share|round(0)|int }}% ({{ "{:,}".format(segment.household_count) }} HHs)</span>
+                    <span class="chart-bar-text">{{ segment.household_share|round(0)|int }}% ({{ "{:,}".format(segment.household_count) }} Customers)</span>
                     {% endif %}
                 </div>
                 {% if is_small_bar %}
-                <span class="chart-bar-text-outside" style="color: {{ segment_colors.get(segment.code[0], '#64748B') }};">{{ segment.household_share|round(0)|int }}% ({{ "{:,}".format(segment.household_count) }} HHs)</span>
+                <span class="chart-bar-text-outside" style="color: {{ segment_colors.get(segment.code[0], '#64748B') }};">{{ segment.household_share|round(0)|int }}% ({{ "{:,}".format(segment.household_count) }} Customers)</span>
                 {% endif %}
             </div>
         </div>

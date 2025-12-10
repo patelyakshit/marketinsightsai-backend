@@ -990,29 +990,92 @@ Style: Twitter ad creative, viral-worthy design""",
 
     spec = platform_specs.get(platform, platform_specs[MarketingPlatform.instagram])
 
-    # Build expert-level prompt for ad creative generation
-    image_prompt = f"""You are an expert {platform.value.title()} advertisement designer creating a professional ad creative.
+    # Detect business type for industry-specific imagery
+    business_type, business_context = detect_business_type(recommendation.store_name)
 
-BRAND/BUSINESS: {recommendation.store_name}
-HEADLINE TO INCLUDE: "{recommendation.headline}"
-TARGET AUDIENCE: Based on demographic analysis
+    # Build industry-specific visual guidance with detailed photography direction
+    industry_visuals = ""
+    industry_subject = "product or service"
+    industry_mood = "professional and inviting"
+    industry_colors = "brand-appropriate warm tones"
 
-DESIGN BRIEF:
-{spec['ad_style']}
+    if business_type == "dog store":
+        industry_subject = "happy golden retriever or labrador with premium dog products"
+        industry_mood = "joyful, playful, heartwarming - celebrating the human-dog bond"
+        industry_colors = "warm earthy tones (amber #F5A623, forest green #2D5A27, cream #FFF8E7)"
+        industry_visuals = """
+SUBJECT REQUIREMENTS (DOG STORE - CRITICAL):
+- Hero subject: A happy, photogenic dog (golden retriever, labrador, or friendly breed) as the emotional anchor
+- Secondary elements: Premium dog products naturally integrated (toys, treats, leashes, beds)
+- Dog expression: Alert, happy, tongue out, engaging with camera or owner
+- Setting: Warm lifestyle environment (home, park, store) NOT a sterile studio
+- Human element (optional): Hands petting dog, partial owner silhouette for emotional connection
+- EXCLUDE: Cats, birds, fish, generic pets - this is 100% DOG-FOCUSED"""
+    elif business_type == "cat store":
+        industry_subject = "elegant cat with cat products"
+        industry_mood = "sophisticated, cozy, serene"
+        industry_colors = "soft neutrals with purple accents (#9B59B6, #ECE0F1, #34495E)"
+        industry_visuals = """
+SUBJECT REQUIREMENTS (CAT STORE):
+- Hero subject: Elegant cat (maine coon, persian, or photogenic breed)
+- Setting: Cozy home environment with cat furniture
+- Mood: Sophisticated, peaceful, independent
+- EXCLUDE: Dogs - this is CAT-FOCUSED"""
+    elif business_type == "pet store":
+        industry_subject = "adorable pets with pet supplies"
+        industry_mood = "friendly, welcoming, family-oriented"
+        industry_colors = "bright, cheerful palette (coral #FF6B6B, teal #4ECDC4, sunshine #FFE66D)"
+        industry_visuals = """
+SUBJECT REQUIREMENTS (PET STORE):
+- Feature cute, healthy animals as main subjects
+- Include pet products and accessories
+- Family-friendly, welcoming atmosphere"""
 
-VISUAL DIRECTION:
+    # Build expert-level prompt using research-backed formula:
+    # Subject + Medium + Style + Lighting + Composition + Mood + Color Palette
+    image_prompt = f"""Create a scroll-stopping {platform.value.title()} advertisement for {recommendation.store_name}.
+
+=== IMAGE SPECIFICATION ===
+FORMAT: {spec['aspect_ratio']} aspect ratio, {spec['dimensions']} pixels
+STYLE: High-end commercial photography meets modern graphic design
+
+=== SUBJECT & COMPOSITION ===
+PRIMARY SUBJECT: {industry_subject}
+HEADLINE TEXT: "{recommendation.headline}" - rendered as bold, clean sans-serif typography
+TEXT PLACEMENT: Upper third with adequate breathing room, ensuring 100% readability
+COMPOSITION: Rule of thirds, with subject in power position (lower-left or center)
+NEGATIVE SPACE: Strategic empty areas for text overlay - DO NOT clutter
+{industry_visuals}
+
+=== VISUAL DIRECTION ===
 {recommendation.visual_concept}
 
-REQUIREMENTS:
-- Generate a complete, ready-to-post advertisement image
-- Include the headline text "{recommendation.headline}" as part of the design
-- Professional graphic design quality (like Canva Pro or Adobe templates)
-- High resolution, {spec['dimensions']} optimized
-- Modern, trendy 2024-2025 design aesthetics
-- Clean typography with excellent readability
-- Cohesive color scheme that pops on social feeds
+=== PHOTOGRAPHY & LIGHTING ===
+LIGHTING: Soft, diffused natural light with subtle rim lighting for depth
+STYLE: Lifestyle product photography, editorial quality, magazine-worthy
+DEPTH OF FIELD: Shallow (f/2.8) - subject sharp, background softly blurred
+CAMERA ANGLE: Slightly elevated, eye-level with subject for connection
 
-DO NOT include: watermarks, placeholder text, lorem ipsum, unfinished elements"""
+=== COLOR & MOOD ===
+COLOR PALETTE: {industry_colors}
+MOOD: {industry_mood}
+CONTRAST: High enough to pop on mobile feeds, but not harsh
+SATURATION: Slightly elevated for social media visibility
+
+=== TYPOGRAPHY REQUIREMENTS ===
+- Headline font: Bold, modern sans-serif (like Montserrat Bold or Poppins)
+- Text color: High contrast against background (white with subtle shadow OR dark on light areas)
+- Size: Large enough to read on mobile thumbnail
+- Optional: Subtle CTA button design ("Shop Now", "Learn More")
+
+=== QUALITY STANDARDS ===
+- Professional advertising agency quality (think Apple, Nike, Chewy ads)
+- Clean, polished, ready-to-post with zero edits needed
+- Modern 2024-2025 design trends
+- Social-media optimized (bright, engaging, thumb-stopping)
+
+=== STRICT EXCLUSIONS ===
+DO NOT include: watermarks, stock photo badges, placeholder text, lorem ipsum, blurry elements, amateur composition, generic clipart, busy backgrounds that compete with text, multiple competing focal points"""
 
     # Generate image using Gemini native image generation
     image_url = None
@@ -1238,7 +1301,7 @@ async def generate_business_insights(
 
     # Build goal-specific focus prompt
     goal_focus = ""
-    goal_title = "Unlocking Business Value"
+    goal_title = "Customer Insights & Recommendations"
     if goal and goal not in ("generic", "standard"):
         goal_focuses = {
             "marketing": {
@@ -1294,31 +1357,32 @@ async def generate_business_insights(
     segment_names = [seg.get('name', seg.get('code', '')) for seg in segments[:5] if seg.get('name') or seg.get('code')]
     segment_names_text = ", ".join(segment_names[:3]) if segment_names else "diverse demographics"
 
-    prompt = f"""Analyze the trade area for {store_name} and provide strategic business recommendations based on the TOP 5 lifestyle segments shown below.
+    prompt = f"""Analyze the customer base for {store_name} and provide strategic business recommendations based on the TOP 5 customer segments shown below.
 
 BUSINESS TYPE: {business_type.upper()}
 {business_context}
 
-TOP 5 LIFESTYLE SEGMENTS (these are the actual customers in this trade area):
+TOP 5 CUSTOMER SEGMENTS (these represent your actual customers):
 {segment_descriptions}{goal_focus}
 
 Write a cohesive paragraph (approximately 120 words) with specific, actionable tactics FOR THIS {business_type.upper()}.
 
 REQUIRED FORMAT:
-1. Start with: "The trade area is driven by [reference the top segment names like {segment_names_text}], so focus on [key theme relevant to {business_type}]."
+1. Start with: "Your top 5 customer segments include {segment_names_text}, which reveals [key insight about your customer base]."
 2. Then provide 4-5 specific tactical recommendations that are DIRECTLY RELEVANT to a {business_type}
 
 CRITICAL RULES:
 - ALL recommendations must be specific to the {business_type} industry - no generic retail advice
-- These segments ARE the customers - do NOT say "no segments" or suggest attracting different demographics
+- These segments ARE your customers - do NOT say "no segments" or suggest attracting different demographics
 - Reference the actual segment names and their characteristics in your recommendations
 - Be specific and tactical with {business_type}-relevant examples
 - Wrap 4-6 key phrases in <strong> tags for emphasis
 - Write as one flowing paragraph, not bullet points
 - NEVER mention lack of data or missing segments - work with what is provided
-- NEVER use geographic references like "in the South", "in Michigan", "in Texas", "in the Midwest", etc."""
+- NEVER use geographic references like "in the South", "in Michigan", "in Texas", "in the Midwest", etc.
+- Use "customers" NOT "households" when referring to the people who shop at this store"""
 
-    system_prompt = f"You are a {business_type} industry expert and location analytics specialist focusing on {goal or 'marketing'} strategy. The segments provided ARE the top 5 customer segments in the trade area. ALL your recommendations must be specific to the {business_type} industry - never give generic advice. Write approximately 120 words. IMPORTANT: Never use geographic region references - keep recommendations universally applicable to the lifestyle characteristics."
+    system_prompt = f"You are a {business_type} industry expert and customer analytics specialist focusing on {goal or 'marketing'} strategy. The segments provided ARE the top 5 customer segments for this store. ALL your recommendations must be specific to the {business_type} industry - never give generic advice. Write approximately 120 words. Use 'customers' not 'households'. IMPORTANT: Never use geographic region references - keep recommendations universally applicable to the lifestyle characteristics."
 
     response = await client.chat.completions.create(
         model=settings.openai_model,
@@ -1800,6 +1864,9 @@ async def generate_marketing_recommendation(
     if not client:
         raise ValueError("OpenAI client not configured")
 
+    # Detect business type for industry-specific content
+    business_type, business_context = detect_business_type(store.name)
+
     # Get top segments with full profile data
     top_segments = sorted(store.segments, key=lambda s: s.household_share, reverse=True)[:5]
 
@@ -1842,6 +1909,9 @@ Your task: Create a professional advertisement creative brief for {store.name} t
 
 Store: {store.name}
 {f"Location: {store.address}" if store.address else ""}
+
+BUSINESS TYPE: {business_type.upper()}
+{business_context}
 
 TARGET AUDIENCE ANALYSIS:
 {chr(10).join(segment_details)}
@@ -1886,7 +1956,7 @@ SEGMENT_INSIGHTS: [insights]"""
     response = await client.chat.completions.create(
         model=settings.openai_model,
         messages=[
-            {"role": "system", "content": "You are a world-class creative director at a top advertising agency. You create viral social media ad campaigns that combine stunning visuals with compelling copy. Your ad designs are professional, on-trend, and convert. Think Lovart, Canva Pro templates, professional ad agencies."},
+            {"role": "system", "content": f"You are a world-class creative director at a top advertising agency specializing in {business_type} marketing. You create viral social media ad campaigns that combine stunning visuals with compelling copy. Your ad designs are professional, on-trend, and convert. Think Lovart, Canva Pro templates, professional ad agencies. ALL content must be specific to the {business_type} industry."},
             {"role": "user", "content": prompt}
         ],
         max_tokens=1000,

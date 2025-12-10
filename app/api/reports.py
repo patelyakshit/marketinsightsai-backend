@@ -1,11 +1,17 @@
 import os
+import io
+import zipfile
+import logging
 import httpx
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
-from fastapi.responses import FileResponse, Response
-from app.models.schemas import TapestryUploadResponse, ReportGenerateRequest, ReportGenerateResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from pydantic import BaseModel
+from app.models.schemas import TapestryUploadResponse, ReportGenerateRequest, ReportGenerateResponse, Store
 from app.services.tapestry_service import parse_tapestry_xlsx, generate_tapestry_report, generate_pdf_from_html
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -260,3 +266,120 @@ async def convert_url_to_pdf(url: str = Query(..., description="URL of HTML to c
         raise HTTPException(status_code=504, detail="Timeout fetching HTML content")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error converting to PDF: {str(e)}")
+
+
+class BatchExportRequest(BaseModel):
+    """Request model for batch export."""
+    store_ids: list[str]
+    stores_data: list[dict]  # Full store data from frontend
+
+
+@router.post("/batch-export")
+async def batch_export_reports(request: BatchExportRequest):
+    """Generate PDF reports for multiple stores and return as ZIP file.
+
+    Args:
+        request: Contains store_ids to export and full stores_data
+
+    Returns:
+        ZIP file containing all PDF reports
+    """
+    from app.models.schemas import TapestrySegment
+
+    if not request.store_ids:
+        raise HTTPException(status_code=400, detail="No stores selected for export")
+
+    if len(request.store_ids) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 stores can be exported at once")
+
+    settings = get_settings()
+    logger.info(f"Starting batch export for {len(request.store_ids)} stores")
+
+    # Build store objects from the provided data
+    stores_map: dict[str, Store] = {}
+    for store_data in request.stores_data:
+        store_id = store_data.get('id', '')
+        if store_id in request.store_ids:
+            # Parse segments
+            segments = []
+            for seg in store_data.get('segments', []):
+                segments.append(TapestrySegment(
+                    code=seg.get('code', ''),
+                    name=seg.get('name', ''),
+                    household_share=seg.get('householdShare', seg.get('household_share', 0)),
+                    household_count=seg.get('householdCount', seg.get('household_count', 0)),
+                    life_mode=seg.get('lifeMode', seg.get('life_mode', '')),
+                    life_stage=seg.get('lifeStage', seg.get('life_stage', '')),
+                    description=seg.get('description'),
+                    median_age=seg.get('medianAge', seg.get('median_age')),
+                    median_household_income=seg.get('medianHouseholdIncome', seg.get('median_household_income')),
+                    median_net_worth=seg.get('medianNetWorth', seg.get('median_net_worth')),
+                    homeownership_rate=seg.get('homeownershipRate', seg.get('homeownership_rate')),
+                ))
+
+            store = Store(
+                id=store_id,
+                name=store_data.get('name', ''),
+                address=store_data.get('address'),
+                store_number=store_data.get('storeNumber', store_data.get('store_number')),
+                drive_time=store_data.get('driveTime', store_data.get('drive_time')),
+                segments=segments,
+            )
+            stores_map[store_id] = store
+
+    # Create ZIP file in memory
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for idx, store_id in enumerate(request.store_ids):
+            store = stores_map.get(store_id)
+            if not store:
+                logger.warning(f"Store {store_id} not found in provided data, skipping")
+                continue
+
+            logger.info(f"Generating report {idx + 1}/{len(request.store_ids)}: {store.name}")
+
+            try:
+                # Generate HTML report
+                report_url = await generate_tapestry_report(store)
+
+                # Get the HTML file path
+                store_num = store.store_number or "unknown"
+                store_name_safe = "".join(c if c.isalnum() or c in ' _-' else '' for c in store.name)[:50].replace(' ', '_')
+                html_filename = f"{store_num}_{store_name_safe}_Lifestyle_report_by_Locaition_Matters.html"
+                html_path = os.path.join(settings.reports_output_path, html_filename)
+
+                # Generate PDF from HTML
+                if os.path.exists(html_path):
+                    pdf_content = generate_pdf_from_html(html_path)
+                    if pdf_content:
+                        pdf_filename = html_filename.replace('.html', '.pdf')
+                        zip_file.writestr(pdf_filename, pdf_content)
+                        logger.info(f"Added {pdf_filename} to ZIP")
+                    else:
+                        # If PDF generation fails, add HTML instead
+                        with open(html_path, 'rb') as f:
+                            zip_file.writestr(html_filename, f.read())
+                        logger.warning(f"PDF generation failed for {store.name}, added HTML instead")
+                else:
+                    logger.warning(f"HTML file not found for {store.name}")
+
+            except Exception as e:
+                logger.error(f"Error generating report for {store.name}: {e}")
+                continue
+
+    # Prepare the ZIP for download
+    zip_buffer.seek(0)
+
+    # Generate filename with timestamp
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_filename = f"tapestry_reports_{len(request.store_ids)}_stores_{timestamp}.zip"
+
+    logger.info(f"Batch export complete: {zip_filename}")
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'}
+    )
